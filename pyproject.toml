@@ -37,6 +37,10 @@ Issues = "https://github.com/UBC-FRESH/fresh-fuchs/issues"
 Changelog = "https://github.com/UBC-FRESH/fresh-fuchs/blob/main/CHANGE_LOG.md"
 
 [project.optional-dependencies]
+bundle = [
+  "femic @ git+https://github.com/UBC-FRESH/femic.git@v0.2.0a1",
+  "geopandas",
+]
 rv = ["pacal>=1.6.1"]
 fhops = ["fhops>=1.0.0"]
 docs = [
