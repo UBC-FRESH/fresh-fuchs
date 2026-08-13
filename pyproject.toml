@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fresh-fuchs"
+version = "0.1.0a0"
+description = "Stochastic, risk-aware forest landscape planning on the TSA29 mini instance (WS3 inner LP + full-MC outer policy)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "UBC FRESH Lab" }]
+keywords = ["forestry", "optimization", "stochastic", "monte-carlo", "forest-planning"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering",
+]
+dependencies = [
+  "numpy",
+  "pandas",
+  "pydantic>=2",
+  "pyyaml",
+  "rich",
+  "typer",
+  "ws3",
+  "highspy",
+]
+
+[project.optional-dependencies]
+rv = ["pacal>=1.6.1"]
+fhops = ["fhops>=1.0.0"]
+femic = ["femic>=0.2.0a1"]
+nemora = ["nemora"]
+freshforge = ["freshforge>=0.1.0a5"]
+dev = [
+  "build",
+  "mypy",
+  "pytest",
+  "ruff",
+  "sphinx",
+  "sphinx-rtd-theme",
+  "twine",
+]
+
+[project.scripts]
+fresh-fuchs = "fresh_fuchs.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

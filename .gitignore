@@ -1,0 +1,18 @@
+# .venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+_build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+coverage.xml
+htmlcov/
+
+# Local working material (see AGENTS.md)
+tmp/
+local/
+outputs/
+data/private/
+*.local
