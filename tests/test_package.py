@@ -1,6 +1,14 @@
 from __future__ import annotations
 
+import importlib
+
+import typer.testing
+from typer.testing import CliRunner
+
 from fresh_fuchs import __version__
+from fresh_fuchs.cli import app
+
+runner = CliRunner()
 
 
 def test_version() -> None:
@@ -8,6 +16,34 @@ def test_version() -> None:
 
 
 def test_cli_importable() -> None:
-    from fresh_fuchs.cli import app
-
     assert app.info.name == "fresh-fuchs"
+
+
+def test_cli_version_command() -> None:
+    result = runner.invoke(app, ["version"])
+    assert result.exit_code == 0
+    assert result.stdout.strip() == __version__
+
+
+def test_cli_lists_stub_commands() -> None:
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    for command in ("build-model", "scenario-run", "inner-run", "outer-run", "pipeline-run"):
+        assert command in result.stdout
+
+
+def test_module_stubs_importable() -> None:
+    for module in (
+        "instance",
+        "economy",
+        "scenario",
+        "inner",
+        "outer",
+        "orchestration",
+    ):
+        imported = importlib.import_module(f"fresh_fuchs.{module}")
+        assert imported.__doc__
+
+
+def test_typer_testing_available() -> None:
+    assert typer.testing
