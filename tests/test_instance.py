@@ -155,6 +155,47 @@ def test_retention_split_conserves_area() -> None:
     assert unmanaged["area_ha"].sum() == pytest.approx(100.0 * 0.2 + 50.0)
 
 
+def test_age_to_midpoint() -> None:
+    cases = {
+        0: 5,
+        4: 5,
+        5: 5,
+        9: 5,
+        10: 15,
+        57: 55,
+        60: 65,
+        62: 65,
+        90: 95,
+        436: 435,
+    }
+    for raw, expected in cases.items():
+        assert instance.age_to_midpoint(raw) == expected, f"age {raw} -> {expected}"
+
+
+def test_age_to_midpoint_rejects_bad_width() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        instance.age_to_midpoint(5, width=0)
+
+
+def test_initial_ages_are_10yr_midpoints(synthetic_bundle) -> None:
+    config, yields, areas = synthetic_bundle
+    write_woodstock_files(areas=areas, yields=yields, config=config)
+    are = (config.model_path / "synthetic.are").read_text()
+    ages = {int(line.split()[6]) for line in are.strip().splitlines() if line.startswith("*A ")}
+    assert ages == {75, 35, 95, 125}
+    assert all(age % 10 == 5 for age in ages)
+
+
+def test_landscape_has_intended_themes_only(synthetic_bundle) -> None:
+    config, yields, areas = synthetic_bundle
+    write_woodstock_files(areas=areas, yields=yields, config=config)
+    lan = (config.model_path / "synthetic.lan").read_text()
+    assert lan.count("*THEME") == 5
+    assert "LU" not in lan.upper().replace("BLUE", "")
+    model = bootstrap_model(config)
+    assert model.nthemes() == 5
+
+
 def test_build_model_requires_bundle_paths(tmp_path) -> None:
     config = InstanceConfig(model_path=tmp_path)
     with pytest.raises(ValueError, match="bundle_dir and .*fragments_path"):

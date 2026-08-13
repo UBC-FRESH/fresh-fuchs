@@ -42,6 +42,13 @@ class InstanceConfig(BaseModel):
     max_age: int = Field(default=300, description="Patchworks-compatible max age.")
     min_harvest_age: int = Field(default=60)
     max_harvest_age: int = Field(default=300)
+    ageclass_width: int = Field(
+        default=10,
+        ge=1,
+        description="Initial stand ages are bucketed to midpoints of this "
+        "many-year age class to keep the Model I LP tight (tsa29mini: 264 "
+        "distinct ages -> 44 midpoints).",
+    )
     workers: int = Field(default=1, ge=1)
 
 

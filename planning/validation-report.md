@@ -23,7 +23,8 @@ records. Companion to `v0.1.0a1-plan.md`.
 | Curves | 108 | 108 | PASS |
 | Yields table rows | 1,407 | 1,407 | PASS |
 | Development types (ws3, after split) | 73 | 73 | PASS |
-| Max initial age (drives null operability) | 436 | 436 | PASS |
+| Max initial age (drives null operability) | 436 | 435 (post-midpoint) | INTENTIONAL |
+| Distinct initial ages | 264 (raw F_AGE) | 37 (10-yr midpoints) | INTENTIONAL (tight model) |
 | 30-period mean annual harvest (even-flow LP) | ~35,381 m3/yr | PENDING (30-period run) | -- |
 | 30-period mean annual harvest (heuristic) | (record here) | PENDING | -- |
 | 30-period mean annual harvest (Patchworks) | ~34,094 m3/yr | reference only | -- |
@@ -35,6 +36,18 @@ Notes:
   6 decimals in the `.are` section plus ws3's `area_epsilon` handling.
 - The 30-period even-flow LP run is slow (~1-2 h, single worker); smoke
   validation uses `--horizon 3`.
+
+## Model tightness (maintainer direction)
+
+- No LU/land-use theme: the Woodstock dataset carries exactly five themes
+  (TSA, IFM, AU, ORIGIN, SILV_STATE). `bootstrap_model` fails hard if the
+  loaded model has any other theme count.
+- Ages are smashed to 10-year ageclass midpoints (`age_to_midpoint`,
+  default `ageclass_width=10` in `InstanceConfig`): 264 distinct fragment
+  ages -> 37 distinct initial ages (5..435, all midpoints). ws3 interpolates
+  yields at any real age (piecewise-linear `Curve.__call__`), so midpoint
+  volumes are exact interpolants of the curve table. Fewer initial ages
+  means fewer action branches in the Model I LP, keeping models tight.
 
 ## P1.4 Open investigation: harvest-area discrepancy vs Patchworks
 

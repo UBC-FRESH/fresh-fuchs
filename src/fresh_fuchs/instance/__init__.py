@@ -21,6 +21,7 @@ from .baseline import (
 )
 from .bundle import (
     MissingDependencyError,
+    age_to_midpoint,
     apply_retention_split,
     build_woodstock_tables,
     load_bundle_context,
@@ -35,6 +36,7 @@ __all__ = [
     "InstanceConfig",
     "MissingDependencyError",
     "add_even_flow_problem",
+    "age_to_midpoint",
     "apply_retention_split",
     "build_model",
     "build_woodstock_tables",
@@ -65,7 +67,7 @@ def build_model(config: InstanceConfig) -> tuple[ws3.forest.ForestModel, dict[st
     context = load_bundle_context(bundle_dir=config.bundle_dir, tsa_list=config.tsa_list)
     tables = build_woodstock_tables(context=context)
     fragments = load_fragments(config.fragments_path)
-    areas = apply_retention_split(fragments)
+    areas = apply_retention_split(fragments, ageclass_width=config.ageclass_width)
 
     written = write_woodstock_files(areas=areas, yields=tables["yields"], config=config)
     model = bootstrap_model(config)
@@ -76,6 +78,8 @@ def build_model(config: InstanceConfig) -> tuple[ws3.forest.ForestModel, dict[st
         "yield_rows": len(tables["yields"]),
         "area_records": len(areas),
         "fragments": len(fragments),
+        "distinct_initial_ages": int(areas["age"].nunique()),
+        "max_initial_age": int(areas["age"].max()),
         "total_area_ha": float(model.inventory(period=0)),
         "managed_area_ha": managed_area_ha(areas),
         "files": [str(path) for path in written],

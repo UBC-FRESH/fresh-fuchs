@@ -42,11 +42,14 @@ pipeline (``profile_ws3_evenflow.py`` and the demo notebook in the
    ``femic.fmg.woodstock``.
 3. ``fresh_fuchs.instance.bundle.apply_retention_split`` mirrors the
    Patchworks proportional-retention split (managed fragment area is split
-   ``1 - RETENTION`` managed / ``RETENTION`` unmanaged).
+   ``1 - RETENTION`` managed / ``RETENTION`` unmanaged) and smashes initial
+   ages to 10-year ageclass midpoints (``ageclass_width`` in
+   ``InstanceConfig``) so the Model I LP stays tight.
 4. ``fresh_fuchs.instance.woodstock.write_woodstock_files`` writes the
    ``.lan/.are/.yld/.act/.trn`` sections; ``bootstrap_model`` loads them
    into ``ws3.forest.ForestModel`` (base 2026, 30 x 10-yr, max age 300,
-   min harvest age 60).
+   min harvest age 60) and asserts exactly five themes — TSA, IFM, AU,
+   ORIGIN, SILV_STATE (no LU/land-use theme).
 5. ``fresh_fuchs.instance.woodstock.prepare_optimization`` adds the null
    action with operability extended to ``max_initial_age +
    horizon * period_length`` so unharvested stands age through the full

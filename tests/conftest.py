@@ -49,6 +49,8 @@ def build_synthetic_yields() -> pd.DataFrame:
 
 
 def build_synthetic_areas() -> pd.DataFrame:
+    # Post-bridge records: ages are already 10-year ageclass midpoints
+    # (apply_retention_split smashes raw fragment ages to midpoints).
     return pd.DataFrame(
         [
             {
@@ -57,7 +59,7 @@ def build_synthetic_areas() -> pd.DataFrame:
                 "ifm": "managed",
                 "origin": "natural",
                 "silv_state": "baseline",
-                "age": 70,
+                "age": 75,
                 "area_ha": 100.0,
             },
             {
@@ -66,7 +68,7 @@ def build_synthetic_areas() -> pd.DataFrame:
                 "ifm": "managed",
                 "origin": "planted",
                 "silv_state": "baseline",
-                "age": 30,
+                "age": 35,
                 "area_ha": 50.0,
             },
             {
@@ -75,7 +77,7 @@ def build_synthetic_areas() -> pd.DataFrame:
                 "ifm": "managed",
                 "origin": "natural",
                 "silv_state": "baseline",
-                "age": 90,
+                "age": 95,
                 "area_ha": 80.0,
             },
             {
@@ -84,7 +86,7 @@ def build_synthetic_areas() -> pd.DataFrame:
                 "ifm": "unmanaged",
                 "origin": "natural",
                 "silv_state": "baseline",
-                "age": 120,
+                "age": 125,
                 "area_ha": 200.0,
             },
         ]

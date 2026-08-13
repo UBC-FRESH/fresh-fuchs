@@ -90,12 +90,32 @@ def load_fragments(fragments_path: Path) -> pd.DataFrame:
     return fragments
 
 
-def apply_retention_split(fragments: pd.DataFrame) -> pd.DataFrame:
+def age_to_midpoint(age: int, *, width: int = 10) -> int:
+    """Map an age to the midpoint of its ``width``-year age class.
+
+    Standard Woodstock-style age-class discretization: a stand aged 62 is
+    treated as being in the 60-69 class with midpoint 65. Keeping a single
+    midpoint per class collapses the initial-age distribution (tsa29mini:
+    264 distinct ages -> 44 midpoints), which keeps the Model I LP tight.
+    """
+    if width <= 0:
+        raise ValueError(f"age class width must be positive, got {width}")
+    if age < 0:
+        raise ValueError(f"age must be non-negative, got {age}")
+    return (age // width) * width + width // 2
+
+
+def apply_retention_split(
+    fragments: pd.DataFrame,
+    *,
+    ageclass_width: int = 10,
+) -> pd.DataFrame:
     """Apply the Patchworks proportional-retention split to fragment records.
 
     Returns long-format area records with columns ``tsa``, ``au_id``,
     ``origin``, ``silv_state``, ``age``, ``ifm``, ``area_ha``. The total area
-    is conserved across the split.
+    is conserved across the split. Ages are bucketed to ``ageclass_width``-
+    year midpoints (default 10) so ws3 stays as tight as possible.
     """
     area_rows: list[dict[str, Any]] = []
     for _, row in fragments.iterrows():
@@ -104,7 +124,7 @@ def apply_retention_split(fragments: pd.DataFrame) -> pd.DataFrame:
             "au_id": int(row["AU"]),
             "origin": str(row["ORIGIN"]),
             "silv_state": str(row["SILV_STATE"]),
-            "age": int(row["F_AGE"]),
+            "age": age_to_midpoint(int(row["F_AGE"]), width=ageclass_width),
         }
         area = float(row["area_ha"])
         retention = float(row["retention"])

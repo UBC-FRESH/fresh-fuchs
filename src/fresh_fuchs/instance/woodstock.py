@@ -15,6 +15,8 @@ import ws3.forest
 
 from .types import InstanceConfig
 
+INTENDED_THEME_COUNT = 5  # TSA, IFM, AU, ORIGIN, SILV_STATE
+
 
 def _landscape_section(config: InstanceConfig, au_ids: list[int]) -> str:
     tsa_block = "\n".join(str(tsa) for tsa in config.tsa_list) + "\n"
@@ -104,6 +106,13 @@ def bootstrap_model(config: InstanceConfig) -> ws3.forest.ForestModel:
     model.import_transitions_section()
     model.compile_actions()
     model.reset()
+
+    if model.nthemes() != INTENDED_THEME_COUNT:
+        raise ValueError(
+            f"expected exactly {INTENDED_THEME_COUNT} themes (TSA, IFM, AU, ORIGIN, "
+            f"SILV_STATE), got {model.nthemes()}; no LU/land-use theme is part of the "
+            "Woodstock dataset"
+        )
     return model
 
 
