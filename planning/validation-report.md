@@ -78,9 +78,70 @@ Notes:
   area is conserved; the ws3 model keeps exactly five themes and the LP is
   unchanged (volume conservation follows from the untouched baseline).
 
-## P1.4 Open investigation: harvest-area discrepancy vs Patchworks
+## P1.4 Harvest-area discrepancy vs Patchworks (investigation, 2026-08-13)
 
-(TBD — carried from project notes: ws3 bridge harvests ~32% more area at a
-lower volume per hectare than Patchworks on the same land base. Hypotheses to
-test: yield-strata resolution, merchantability/volume discounts, operability
-age-band differences.)
+Reference comparison (notebook cell 19, `docs/ws3_harvest_scenario_woodstock_bootstrap_demo.ipynb`):
+
+| Metric (periods 1-30) | ws3 LP (reference) | Patchworks (`tsa29mini_patchworks_model`) | Diff |
+|---|---|---|---|
+| Total harvested area | 95,166 ha | 72,171 ha | +31.9% |
+| Total harvested volume | 10,614,173 m3 | 10,228,152 m3 | +3.8% |
+| Mean annual harvest | 35,381 m3/yr | 34,094 m3/yr | +3.8% |
+| Volume per harvested ha | 111.5 m3/ha | 141.7 m3/ha | -21% |
+
+fresh-fuchs production run reproduces the ws3 lane almost exactly (midpoint
+ages): total area 94,890 ha, total volume 10,635,259 m3, 35,451 m3/yr,
+112.1 m3/ha.
+
+Diagnosis (ws3-side mechanism, reproduced):
+
+- Per-period volume/ha of the LP schedule falls monotonically over the
+  horizon (211, 184, 167, ..., 66, 36 m3/ha), i.e. the LP harvests
+  increasingly marginal stands, down to ~36 m3/ha, while landscape growing
+  stock RISES (6.58M -> 7.14M m3). This is a flow-maintenance artifact, not
+  liquidation.
+- Managed operable stock at period 0 (age >= 60) is only 22,067 ha of the
+  35,083 ha managed base, mean 135 m3/ha; only 11,462 ha (52%) is >= 100
+  m3/ha and 6,603 ha (30%) is >= 140 m3/ha (Patchworks' average).
+- The even-flow band is on VOLUME: `(1 - eps)*V1 <= Vt <= (1 + eps)*V1` with
+  `eps = 0.05`. To hold the band the LP must draw on low-volume/ha operable
+  stock, inflating harvested area while adding little volume. The band is
+  binding in the middle periods (periods 3-20 sit at the -5% bound; 21-30 at
+  +5%), confirming stock scarcity rather than yield-definition differences.
+- Flow-band sensitivity (30-period LP, same model):
+
+  | eps | Total area (ha) | m3/yr | m3/ha |
+  |---|---|---|---|
+  | 0.0 (strict) | 97,026 | 35,061 | 108.4 |
+  | 0.05 (production) | 94,890 | 35,451 | 112.1 |
+  | 0.10 (wide) | 93,324 | 35,778 | 115.0 |
+
+  A tighter band forces MORE area at LOWER volume/ha: the volume even-flow
+  line is the direct driver of the extra area. Even at eps=0.10 the area is
+  ~30% above Patchworks, so Patchworks additionally restricts its harvest
+  stock (see mitigation note below).
+
+Hypotheses:
+
+- Yield-strata resolution: NOT the cause. Both lanes come from the same
+  femic bundle context (the Patchworks XML carries 781 curves vs 108 in the
+  bundle, but the main yield curves referenced by `au_table.csv` are the
+  same). Volume differs by only +3.8%.
+- Merch-volume discounts: NOT present in either lane (both use gross
+  `totvol`). The missing mechanism is merchantability filtering: ws3's
+  operability is "any stand aged 60-300", regardless of volume/ha.
+- Operability / flow structure: CONFIRMED as the operative mechanism (see
+  diagnosis above).
+
+Verdict: the ~32% extra area is the ws3 LP harvesting sub-merchantable,
+low-volume/ha stands to hold the volume even-flow band; it is a formulation
+artifact of the volume-band even-flow setup, not a land-base or yield bug.
+Mitigations to consider (not applied in P1): a merchantability floor in
+harvest operability (e.g. min volume/ha; ws3 operability is expressed on
+theme values and age only, so this requires a formulation-side filter or a
+minimum-age proxy), an area-based even-flow target, or a looser band.
+Sensitivity table: `outputs/tsa29mini/p1.4_flow_sensitivity.csv`.
+
+Open items: Patchworks solve logs/settings for `tsa29mini_patchworks_model`
+are not present in the bundle, so Patchworks' own flow rule cannot be
+confirmed directly; the comparison rests on the reference notebook table.
