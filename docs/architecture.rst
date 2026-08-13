@@ -57,6 +57,14 @@ pipeline (``profile_ws3_evenflow.py`` and the demo notebook in the
 6. ``fresh_fuchs.instance.baseline`` defines the volume-max even-flow LP
    (per-period harvest volume within 5% of period 1, managed land base) and
    the oldest-first priority-queue heuristic.
+7. ``fresh_fuchs.instance.species`` adds a static species classification
+   (``SpeciesClass`` per AU from the ``canfi_species`` code in
+   ``au_table.csv``); ``fresh_fuchs.instance.composition`` computes the
+   managed-land-base species area-share composition and the species class of
+   every development type. The ws3 model stays species-free (five themes),
+   so the species layer never grows the model — Phase 4 composes species
+   targets against this surface. The tsa29mini bundle has no age-varying
+   species-proportion curves (re-scoped P1.3).
 
 Only the femic source dependency is required for real-bundle builds;
 synthetic fixtures exercise the same path without femic/geopandas.

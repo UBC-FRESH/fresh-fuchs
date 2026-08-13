@@ -8,6 +8,8 @@ The CLI is a thin wrapper over the Python APIs. Commands that have landed:
   (Phase 1).
 - ``baseline-run`` — run the volume-max even-flow LP and the oldest-first
   heuristic baselines on a built model (Phase 1).
+- ``species-composition`` — report the managed-land-base species composition
+  by static primary-species class (Phase 1, re-scoped P1.3).
 
 Remaining stubs land with their roadmap phases:
 
@@ -65,3 +67,25 @@ Options:
   null-action operability across the full horizon).
 - ``--horizon`` — number of periods.
 - ``--out`` — optional CSV of per-period results for both baselines.
+
+``species-composition``
+-----------------------
+
+Report the managed-land-base species composition by static primary-species
+class. Species classes come from each AU's ``canfi_species`` code in
+``au_table.csv`` (tsa29mini: 100 = spruce ``SX``, 204 = lodgepole pine
+``PL``, 500 = Douglas-fir ``FD``; unknown codes map to ``OT``). The ws3 model
+itself stays species-free (five themes); composition is computed from the
+post-split area records.
+
+.. code-block:: bash
+
+   fresh-fuchs species-composition \
+     --bundle-dir <bundle>/data/model_input_bundle \
+     --fragments <bundle>/output/patchworks_tsa29mini/fragments/fragments.shp
+
+Options:
+
+- ``--bundle-dir`` — directory with the bundle CSV tables (required).
+- ``--fragments`` — fragments shapefile path (required).
+- ``--ageclass-width`` — age-class width for midpoint bucketing (default 10).

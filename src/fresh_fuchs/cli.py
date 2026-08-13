@@ -15,8 +15,13 @@ from fresh_fuchs.instance import (
     BaselineConfig,
     InstanceConfig,
     add_even_flow_problem,
+    apply_retention_split,
     bootstrap_model,
     build_model,
+    development_type_species,
+    load_fragments,
+    load_species_by_au,
+    managed_landscape_composition,
     prepare_optimization,
     run_oldest_first_heuristic,
     solve_even_flow,
@@ -107,6 +112,29 @@ def baseline_run_cmd(
         out_csv.parent.mkdir(parents=True, exist_ok=True)
         stacked.to_csv(out_csv, index=False)
         typer.echo(f"  wrote {out_csv}")
+
+
+@app.command("species-composition")
+def species_composition_cmd(
+    bundle_dir: Path = typer.Option(..., "--bundle-dir", help="Bundle directory (bundle tables)."),
+    fragments_path: Path = typer.Option(..., "--fragments", help="Fragments shapefile path."),
+    ageclass_width: int = typer.Option(10, "--ageclass-width", min=1),
+) -> None:
+    """Report managed-land-base species composition by static class (Phase 1)."""
+    species_by_au = load_species_by_au(bundle_dir)
+    fragments = load_fragments(fragments_path)
+    areas = apply_retention_split(
+        fragments,
+        ageclass_width=ageclass_width,
+        species_by_au=species_by_au,
+    )
+    composition = managed_landscape_composition(areas)
+    dts = development_type_species(areas)
+
+    typer.echo("Managed land-base composition by primary species class:")
+    for _, row in composition.iterrows():
+        typer.echo(f"  {row['species']:>4}  {row['area_ha']:,.1f} ha  {row['share']:6.1%}")
+    typer.echo(f"Species-aware development-type classes: {len(dts)}")
 
 
 @app.command("scenario-run")

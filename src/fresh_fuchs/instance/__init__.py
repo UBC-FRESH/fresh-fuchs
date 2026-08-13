@@ -28,25 +28,38 @@ from .bundle import (
     load_fragments,
     managed_area_ha,
 )
+from .composition import development_type_species, managed_landscape_composition
+from .species import (
+    CANFI_SPECIES_CLASS,
+    SpeciesClass,
+    load_species_by_au,
+    species_class_for_canfi,
+)
 from .types import BaselineConfig, InstanceConfig
 from .woodstock import bootstrap_model, prepare_optimization, write_woodstock_files
 
 __all__ = [
     "BaselineConfig",
+    "CANFI_SPECIES_CLASS",
     "InstanceConfig",
     "MissingDependencyError",
+    "SpeciesClass",
     "add_even_flow_problem",
     "age_to_midpoint",
     "apply_retention_split",
     "build_model",
     "build_woodstock_tables",
     "bootstrap_model",
+    "development_type_species",
     "load_bundle_context",
     "load_fragments",
+    "load_species_by_au",
     "managed_area_ha",
+    "managed_landscape_composition",
     "prepare_optimization",
     "run_oldest_first_heuristic",
     "solve_even_flow",
+    "species_class_for_canfi",
     "summarize",
     "write_woodstock_files",
 ]
@@ -67,11 +80,17 @@ def build_model(config: InstanceConfig) -> tuple[ws3.forest.ForestModel, dict[st
     context = load_bundle_context(bundle_dir=config.bundle_dir, tsa_list=config.tsa_list)
     tables = build_woodstock_tables(context=context)
     fragments = load_fragments(config.fragments_path)
-    areas = apply_retention_split(fragments, ageclass_width=config.ageclass_width)
+    species_by_au = load_species_by_au(config.bundle_dir)
+    areas = apply_retention_split(
+        fragments,
+        ageclass_width=config.ageclass_width,
+        species_by_au=species_by_au,
+    )
 
     written = write_woodstock_files(areas=areas, yields=tables["yields"], config=config)
     model = bootstrap_model(config)
 
+    composition = managed_landscape_composition(areas)
     return model, {
         "analysis_units": len(context.analysis_units),
         "curves": len(context.curves_by_id),
@@ -82,6 +101,11 @@ def build_model(config: InstanceConfig) -> tuple[ws3.forest.ForestModel, dict[st
         "max_initial_age": int(areas["age"].max()),
         "total_area_ha": float(model.inventory(period=0)),
         "managed_area_ha": managed_area_ha(areas),
+        "species_by_au": {int(k): str(v) for k, v in species_by_au.items()},
+        "managed_species_composition": {
+            str(row["species"]): float(row["share"])
+            for _, row in composition.iterrows()
+        },
         "files": [str(path) for path in written],
         "horizon": config.horizon,
     }

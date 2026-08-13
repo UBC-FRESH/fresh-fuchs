@@ -20,6 +20,8 @@ import pandas as pd
 if TYPE_CHECKING:
     from femic.fmg.core import BundleModelContext
 
+from .species import SpeciesClass
+
 FRAGMENT_COLUMNS = ("TSA", "AU", "ORIGIN", "SILV_STATE", "F_AGE", "IFM", "AREA_HA", "RETENTION")
 
 
@@ -109,6 +111,7 @@ def apply_retention_split(
     fragments: pd.DataFrame,
     *,
     ageclass_width: int = 10,
+    species_by_au: dict[int, SpeciesClass] | None = None,
 ) -> pd.DataFrame:
     """Apply the Patchworks proportional-retention split to fragment records.
 
@@ -116,6 +119,11 @@ def apply_retention_split(
     ``origin``, ``silv_state``, ``age``, ``ifm``, ``area_ha``. The total area
     is conserved across the split. Ages are bucketed to ``ageclass_width``-
     year midpoints (default 10) so ws3 stays as tight as possible.
+
+    When ``species_by_au`` is provided, each record also carries its AU's
+    static primary species class in the ``species`` column (see
+    :mod:`fresh_fuchs.instance.species`); the ws3 model itself keeps exactly
+    five themes, so the species attribute never expands the model.
     """
     area_rows: list[dict[str, Any]] = []
     for _, row in fragments.iterrows():
@@ -126,6 +134,9 @@ def apply_retention_split(
             "silv_state": str(row["SILV_STATE"]),
             "age": age_to_midpoint(int(row["F_AGE"]), width=ageclass_width),
         }
+        if species_by_au is not None:
+            species = species_by_au.get(int(row["AU"]), SpeciesClass.OTHER)
+            base["species"] = species.value
         area = float(row["area_ha"])
         retention = float(row["retention"])
         ifm = str(row["IFM"])

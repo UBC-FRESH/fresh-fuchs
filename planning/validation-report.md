@@ -55,6 +55,29 @@ Notes:
   volumes are exact interpolants of the curve table. Fewer initial ages
   means fewer action branches in the Model I LP, keeping models tight.
 
+## P1.3 Species dimension (re-scoped, static class)
+
+- The tsa29mini bundle carries no species-proportion curves: all 108 curves
+  are `treated`/`untreated`; fragments have no species attribute. femic's
+  species-proportion machinery requires input curves of type
+  `managed_species_prop_*` / `unmanaged_species_prop_*`, which the bundle
+  does not provide. Age-varying proportions are therefore unavailable for
+  the mini case (recorded data gap; Phase 4 concern gated on upstream data).
+- Static primary-species class per AU from `au_table.csv` `canfi_species`
+  (codes 100/204/500; see `instance/species.py` for the provenance of the
+  mapping).
+
+| Species class | CANFI code | Managed area (ha) | Share |
+|---|---|---|---|
+| FD (Douglas-fir) | 500 | 20,217.1 | 57.6% |
+| PL (lodgepole pine) | 204 | 14,740.3 | 42.0% |
+| SX (spruce) | 100 | 125.6 | 0.4% |
+| Total | -- | 35,083.0 | 100.0% |
+
+- The composition sums to the managed land-base anchor (35,083.0 ha), so
+  area is conserved; the ws3 model keeps exactly five themes and the LP is
+  unchanged (volume conservation follows from the untouched baseline).
+
 ## P1.4 Open investigation: harvest-area discrepancy vs Patchworks
 
 (TBD — carried from project notes: ws3 bridge harvests ~32% more area at a
