@@ -1,13 +1,14 @@
 Architecture
 ============
 
-(Under construction — Phase 0.)
-
 Module map (see ``planning/v0.1.0a1-plan.md`` section 2 for the data flow
 and per-phase scope):
 
-- ``fresh_fuchs.instance`` — femic tsa29mini bundle -> extended ws3 model
-  (Phase 1).
+- ``fresh_fuchs.instance`` — femic tsa29mini bundle -> extended ws3 model:
+  bundle context and Woodstock tables via ``femic.fmg``, the Patchworks
+  retention split, Woodstock-format section writer, ws3 ``ForestModel``
+  bootstrap (null action, horizon-long operability), and the deterministic
+  baselines (volume-max even-flow LP and oldest-first heuristic).
 - ``fresh_fuchs.economy`` — NPV surface: revenue, harvest costs (fhops),
   replanting costs, salvage economics, discounting (Phase 2).
 - ``fresh_fuchs.scenario`` — full-MC fire/price scenario engine with a
@@ -26,3 +27,45 @@ Design invariants:
 - CLI commands are thin wrappers over Python APIs.
 - Typed records at boundaries; linear inner problem (continuous LP).
 - Provenance on every input, formulation, seed, and result.
+
+The ``instance`` bridge in detail
+---------------------------------
+
+``build-model`` and the ``instance`` API follow the reference tsa29mini
+pipeline (``profile_ws3_evenflow.py`` and the demo notebook in the
+``femic-tsa29mini-instance`` bundle):
+
+1. ``fresh_fuchs.instance.bundle.load_bundle_context`` builds the femic
+   analysis-unit / curve context from the bundle CSVs.
+2. ``fresh_fuchs.instance.bundle.build_woodstock_tables`` produces the
+   long-format yields/actions/transitions frames via
+   ``femic.fmg.woodstock``.
+3. ``fresh_fuchs.instance.bundle.apply_retention_split`` mirrors the
+   Patchworks proportional-retention split (managed fragment area is split
+   ``1 - RETENTION`` managed / ``RETENTION`` unmanaged) and smashes initial
+   ages to 10-year ageclass midpoints (``ageclass_width`` in
+   ``InstanceConfig``) so the Model I LP stays tight.
+4. ``fresh_fuchs.instance.woodstock.write_woodstock_files`` writes the
+   ``.lan/.are/.yld/.act/.trn`` sections; ``bootstrap_model`` loads them
+   into ``ws3.forest.ForestModel`` (base 2026, 30 x 10-yr, max age 300,
+   min harvest age 60) and asserts exactly five themes — TSA, IFM, AU,
+   ORIGIN, SILV_STATE (no LU/land-use theme).
+5. ``fresh_fuchs.instance.woodstock.prepare_optimization`` adds the null
+   action with operability extended to ``max_initial_age +
+   horizon * period_length`` so unharvested stands age through the full
+   horizon.
+6. ``fresh_fuchs.instance.baseline`` defines the volume-max even-flow LP
+   (per-period harvest volume within 5% of period 1, managed land base) and
+   the oldest-first priority-queue heuristic.
+7. ``fresh_fuchs.instance.species`` adds a static species classification
+   (``SpeciesClass`` per AU from the ``canfi_species`` code in
+   ``au_table.csv``); ``fresh_fuchs.instance.composition`` computes the
+   managed-land-base species area-share composition and the species class of
+   every development type. The ws3 model stays species-free (five themes),
+   so the species layer never grows the model — Phase 4 composes species
+   targets against this surface. The tsa29mini bundle has no age-varying
+   species-proportion curves (re-scoped P1.3).
+
+Only the femic source dependency is required for real-bundle builds;
+synthetic fixtures exercise the same path without femic/geopandas.
+
