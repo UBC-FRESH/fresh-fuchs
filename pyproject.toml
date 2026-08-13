@@ -29,35 +29,56 @@ dependencies = [
   "highspy",
 ]
 
+[project.urls]
+Homepage = "https://github.com/UBC-FRESH/fresh-fuchs"
+Documentation = "https://ubc-fresh.github.io/fresh-fuchs/"
+Repository = "https://github.com/UBC-FRESH/fresh-fuchs"
+Issues = "https://github.com/UBC-FRESH/fresh-fuchs/issues"
+Changelog = "https://github.com/UBC-FRESH/fresh-fuchs/blob/main/CHANGE_LOG.md"
+
 [project.optional-dependencies]
 rv = ["pacal>=1.6.1"]
 fhops = ["fhops>=1.0.0"]
-femic = ["femic>=0.2.0a1"]
-nemora = ["nemora"]
-freshforge = ["freshforge>=0.1.0a5"]
-dev = [
-  "build",
-  "mypy",
-  "pytest",
-  "ruff",
-  "sphinx",
-  "sphinx-rtd-theme",
-  "twine",
+docs = [
+  "sphinx>=7",
+  "sphinx-rtd-theme>=2",
 ]
+dev = [
+  "build>=1.2",
+  "pytest>=8",
+  "ruff>=0.5",
+  "sphinx>=7",
+  "sphinx-rtd-theme>=2",
+  "twine>=5",
+]
+quality = ["ruff>=0.5"]
+release = [
+  "build>=1.2",
+  "twine>=5",
+]
+test = ["pytest>=8"]
 
 [project.scripts]
 fresh-fuchs = "fresh_fuchs.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-ra"
+addopts = "-q"
+pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py311"
+extend-exclude = ["tmp"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "W"]
 
 [tool.mypy]
 python_version = "3.11"

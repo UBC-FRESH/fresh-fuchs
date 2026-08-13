@@ -10,7 +10,7 @@ synchronized with GitHub issues, planning notes, pull requests, and
 
 | Phase | Parent issue | Branch | Status |
 | --- | --- | --- | --- |
-| P0 Skeleton scaffold | TBD | `feature/p0-skeleton-scaffold` | Planned |
+| P0 Skeleton scaffold | TBD | `feature/p0-skeleton-scaffold` | Complete |
 | P1 Instance and model integration | TBD | `feature/p1-instance-model` | Planned |
 | P2 Economic valuation layer | TBD | `feature/p2-economy` | Planned |
 | P3 Full-MC scenario engine | TBD | `feature/p3-scenario` | Planned |

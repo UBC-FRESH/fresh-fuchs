@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use fresh-fuchs, please cite the software repository."
+title: "fresh-fuchs"
+abstract: "Stochastic, risk-aware forest landscape planning on the TSA29 mini instance (WS3 inner LP + full-MC outer policy)."
+authors:
+  - name: "UBC FRESH Lab"
+repository-code: "https://github.com/UBC-FRESH/fresh-fuchs"
+url: "https://github.com/UBC-FRESH/fresh-fuchs"
+license: "MIT"
+version: "0.1.0a0"
+date-released: "2026-08-13"
