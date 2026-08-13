@@ -25,8 +25,8 @@ records. Companion to `v0.1.0a1-plan.md`.
 | Development types (ws3, after split) | 73 | 73 | PASS |
 | Max initial age (drives null operability) | 436 | 435 (post-midpoint) | INTENTIONAL |
 | Distinct initial ages | 264 (raw F_AGE) | 37 (10-yr midpoints) | INTENTIONAL (tight model) |
-| 30-period mean annual harvest (even-flow LP) | ~35,381 m3/yr | PENDING (30-period run) | -- |
-| 30-period mean annual harvest (heuristic) | (record here) | PENDING | -- |
+| 30-period mean annual harvest (even-flow LP) | ~35,381 m3/yr (raw-age ws3) | 35,451 m3/yr (10-yr midpoints) | PASS (+0.2%) |
+| 30-period mean annual harvest (oldest-first heuristic) | (record here) | 91,718 m3/yr | RECORDED |
 | 30-period mean annual harvest (Patchworks) | ~34,094 m3/yr | reference only | -- |
 
 Notes:
@@ -36,6 +36,12 @@ Notes:
   6 decimals in the `.are` section plus ws3's `area_epsilon` handling.
 - The 30-period even-flow LP run is slow (~1-2 h, single worker); smoke
   validation uses `--horizon 3`.
+- 2026-08-13 30-period run (tightened model, midpoint ages): LP optimal;
+  per-period volumes within the 5% even-flow band (period 1 = 361,129 m3;
+  periods 3-20 at -5%, 21-30 at +5%, volume-max sawtooth); total harvested
+  area 94,890 ha (3,163 ha/period). Heuristic: total harvested area
+  194,012 ha (6,467 ha/period), monotone age-class ramp. Anchors recorded
+  from `outputs/tsa29mini/baseline_30.csv`.
 
 ## Model tightness (maintainer direction)
 
