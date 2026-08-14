@@ -681,3 +681,78 @@ guards the module so the core suite stays green without the extra.
 Record count: 139 tests total; ruff, docs, build, twine green. freshforge
 0.1.0a5 (commit `5bce95b`) installed editable locally; CI installs it from
 the pinned git URL.
+
+## P5.2 Phase 5 validation (consolidated anchors + MC convergence)
+
+This section consolidates the deterministic anchors, parity checks, and
+baseline comparison recorded in Phases 1-4 and adds the MC convergence
+study. Anchors are *compared against*, not force-fit; every deviation is
+recorded with a reason.
+
+### Deterministic anchors (real bundle, from P1)
+
+| Check | Anchor | Observed | Status |
+| --- | --- | --- | --- |
+| Managed land base after retention split | 35,083.0 ha (ws3) / 35,083.2 ha (Patchworks) | 35,083.015 ha | PASS |
+| 30-period mean annual harvest (even-flow volume-max LP) | ~35,381 m3/yr (raw-age ws3) | 35,451 m3/yr (10-yr midpoints) | PASS (+0.2%; midpoint aging) |
+| Species composition | sums to managed land base | 35,083.0 ha, 100.0% | PASS |
+
+### Fire-free vs deterministic parity (real bundle, from P3.6)
+
+- Fire-free (burn probability 0) through the full MC pipeline reproduces the
+  NPV-max anchor bit-level: mean annual harvest 33,624.77 m3/yr, total
+  harvested area 104,462.175 ha, per-period differences < 1e-6 vs
+  `outputs/tsa29mini/npv_30.csv` (NPV objective 19.62M; h=30). The synthetic
+  fire-free path reproduces the volume-max baseline exactly.
+
+### Cost-vs-volume baseline comparison (real bundle, from P2/P3)
+
+- npv-max (3% discount) vs volume-max even-flow: the NPV objective reshapes
+  the schedule (mean annual 33,624.77 m3/yr NPV-max vs 35,451 m3/yr
+  volume-max; total area 104,462.175 ha); both solve `optimal`. Salvage
+  economics (negative default SPF margin) suppress salvage, matching the
+  fresh-salvage reference agent.
+
+### Harvest-area discrepancy vs Patchworks (status, from P1.4)
+
+- Mean annual harvest: ws3 35,381 m3/yr vs Patchworks 34,094 m3/yr (+3.8%).
+  Root cause recorded in P1.4: Patchworks applies a minimum-harvest-age /
+  seral constraint set and a different yield-curve aging basis; only
+  ~52% of the managed base is >= 100 yr. The discrepancy is *understood and
+  bounded*; it is a modelling-convention difference, not a defect. No
+  further action for v0.1.0a1 (documented as a caveat).
+
+### MC convergence of CVaR (synthetic, this task)
+
+`tests/test_mc_convergence.py` runs the scenario -> inner-LP pipeline on
+the public-safe synthetic instance at catalogue sizes n = 5..320 (seed-fixed
+master seed 42, horizon 2) and records CVaR(0.95) and E[NPV] of the
+unconstrained-policy NPV distribution.
+
+| n | E[NPV] | CVaR(0.95) | CVaR dev vs n=320 |
+| --- | --- | --- | --- |
+| 5 | 825,086.9 | 820,872.4 | 0.229% |
+| 10 | 825,603.4 | 820,872.4 | 0.229% |
+| 20 | 826,455.9 | 820,872.4 | 0.229% |
+| 40 | 826,203.4 | 820,138.1 | 0.140% |
+| 80 | 825,992.7 | 818,635.6 | 0.044% |
+| 160 | 825,885.4 | 818,837.8 | 0.019% |
+| 320 | 825,620.3 | 818,994.3 | 0.000% |
+
+Findings (synthetic instance, thin fire tail at horizon 2):
+
+- E[NPV] is stable to < 0.17% across the whole ladder (825,086-826,456).
+- CVaR(0.95) is stable to < 0.23% even at n=5 and to < 0.15% by n=40; the
+  whole ladder spans < 0.28%. The tail is thin because fire is a
+  low-probability event on two zones over two periods, so even a small
+  catalogue captures the worst case.
+- **Convergence guidance**: on this instance n ~ 40 already stabilizes
+  CVaR(0.95) to < 0.15%; n ~ 80 is a safe production catalogue size. On the
+  real bundle (thicker fire tail over 30 periods) a larger catalogue is
+  expected; the same helper (`outer.conditional_value_at_risk` over a
+  seed-fixed catalogue ladder) measures it when a production run is
+  commissioned. The test asserts the < 0.5% stability bound and seed-fixed
+  reproducibility.
+
+Record count: 141 tests total (139 + 2 convergence); ruff, docs, build,
+twine green.
