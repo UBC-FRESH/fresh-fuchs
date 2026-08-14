@@ -258,3 +258,22 @@ with more zones work unchanged.
 
 Parity: 14 unit tests assert the reference values and the dynamics ordering;
 the full suite is 68 tests.
+
+## P3.2 Distribution framework (calibration record)
+
+`scenario/distributions.py` provides the parameter-distribution registry with
+seed control:
+
+- Families: `fixed` (deterministic value), `gaussian` (mean/std), `empirical`
+  (sample uniformly from a provided array). Field validation per family.
+- Seeding: every draw funnels through `numpy.random.default_rng`; a full
+  vector draw under one master seed is bit-stable (dimensions drawn in
+  declaration order).
+- `UncertaintyVector` maps `UncertaintyDimension` (fire_burn_rate, price) to
+  a `ParameterDistribution`, meeting the notes' fire + price vector
+  requirement (only fire active in v0.1.0a1).
+- nemora integration: `nemora_sample_distribution` delegates to
+  `nemora.sampling.sample_distribution` with a seeded generator, gated by
+  `MissingDependencyError` when nemora is absent (it is not installed here;
+  the empirical family samples its own array, whose Phase 4 source is
+  nemora's bootstrap).
