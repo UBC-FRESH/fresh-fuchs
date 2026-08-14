@@ -20,13 +20,13 @@ Bundle builds (Phase 1)
 -----------------------
 
 Building the ws3 model from a real femic bundle requires the ``bundle``
-extra, which pulls ``femic`` (source dependency) and ``geopandas``::
+extra, which pulls ``femic`` (pinned to the PyPI alpha ``0.2.0a1``) and
+``geopandas``::
 
    pip install -e ".[dev,bundle]"
 
-``femic`` is not on PyPI; the extra installs it from the UBC-FRESH git
-repository at the pinned tag. A local source checkout can be used instead
-(for example during development alongside the femic repo)::
+A local femic source checkout can be used instead (for example during
+development alongside the femic repo)::
 
    pip install --no-deps -e /path/to/femic
 
@@ -34,9 +34,9 @@ Orchestration (Phase 5)
 -----------------------
 
 The freshforge workflow/matrix orchestration (``fresh_fuchs.orchestration``)
-requires the ``orchestration`` extra, which pulls ``freshforge`` (source
-dependency, not on PyPI) from the UBC-FRESH git repository at the pinned
-commit::
+requires the ``orchestration`` extra, which pulls ``freshforge`` (pinned to
+the PyPI alpha ``0.1.0a6``, the first release with the evidence-manifest
+API)::
 
    pip install -e ".[dev,orchestration]"
 
@@ -51,9 +51,8 @@ instead::
 Other external source dependencies
 ----------------------------------
 
-The following UBC-FRESH packages are not on PyPI yet and are expected as
-local source checkouts whose paths come from configuration or environment:
-
-- ``nemora`` — distribution fit and sampling (an optional stochastic-driver
-  basis; the v0.1.0a1 scenario engine uses a built-in Gaussian/fixed
-  distribution registry, so nemora is not required for the default pipeline).
+``nemora`` — distribution fit and sampling — is an optional stochastic-driver
+basis and is not yet on PyPI (expected as a local source checkout whose path
+comes from configuration). The v0.1.0a1 scenario engine uses a built-in
+Gaussian/fixed distribution registry, so nemora is not required for the
+default pipeline.
