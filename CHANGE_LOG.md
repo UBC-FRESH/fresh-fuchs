@@ -4,6 +4,54 @@ Append-only project narrative, reverse-chronological.
 
 ## 0.1.0a1-pre — 2026-08-14
 
+Phase 3 (full-MC scenario engine) complete on `feature/p3-scenario`; PR to
+`main` pending.
+
+- P3.1 Scenario records and catalogue: typed `DisturbanceScenario` /
+  `FireEvent` records, `ScenarioGenerationParams` with
+  per-dimension `ParameterDistribution` (Gaussian/fixed, with provenance),
+  seed-fixed Monte-Carlo catalogue generation, `scenario/records.py`.
+- P3.2 Fire model: `scenario/fire.py` — per-zone `MFRI_YEARS_BY_ZONE`
+  (SBPS 100 / IDF 200 / MS 150 / ESSF 200 / ICH 250 / SBS 125), annual burn
+  rate 1/MFRI, severity ladder {Unburned 0, Low 0.30, Moderate 0.60,
+  High 0.85}, ordering harvest -> fire -> salvage -> decay, default
+  Moderate. Zone/stratum lookup fails fast on unknown names.
+- P3.3 Scenario operability: `apply_salvage_operability` closes fire-free
+  periods with an empty salvage age window so the Model I tree stays
+  minimal; lookups by zone name keyed from the AU table stratum prefix;
+  98 tests green. (Closed periods use `(0, -1)` rather than a `None`
+  sentinel for PyPI ws3 1.0.5 compatibility.)
+- P3.4 Fire encoding in the inner LP (`scenario/fire_lp.py`): fire as
+  path-dependent coefficients — survival `Pi(1-p)` since regeneration,
+  green volume `Y(age)*survival`, burn influx `p*exposed`, salvageable
+  `severity_frac*influx`; `salvage` is a real Model I action with age-0
+  regeneration and a free LP decision (default negative SPF margin -11.95
+  -> no salvage; positive margins exercise the mechanism); salvage
+  feasibility row `salvage_vol - salvageable_vol <= 0`; `min_salvage_age`
+  (default 60) excludes regenerating stands and bounds Model I tree growth.
+  Salvage area reported from the same leaf accounting as salvage volume.
+  Real-bundle scaling: h=20 ~377k vars (~6 min), h=24+ tens of minutes per
+  scenario under an all-periods burn worst case; fire-free h=30 ~4-14 min
+  and bit-level reproduces the deterministic baseline.
+- P3.5 Scenario -> LP pipeline (`scenario/pipeline.py`): fresh model per
+  scenario, salvage action + operability, fire LP build/solve/apply, and a
+  run record with per-period schedule, total NPV, status, and environment
+  provenance (JSON + CSVs). Process-pool parallelism via the spawn start
+  method (the parent is multi-threaded; forking was unsafe); parallel
+  results bit-match sequential. CLI `scenario-run` wired end-to-end; sample
+  run at `outputs/tsa29mini/scenario_run_h8/` (gitignored).
+- P3.6 Acceptance (`tests/test_phase3_acceptance.py`, 3 tests):
+  fire-free through the full pipeline reproduces the volume-max baseline
+  exactly (synthetic); burn multiplier 0.0/0.5/1.0/2.0 -> strictly
+  decreasing total NPV (synthetic test + real h=8 recorded: NPV
+  23.35M/21.56M/19.90M/16.94M); seed-fixed pipeline runs bit-stable.
+  Real bundle h=30 fire-free reproduces the NPV-max anchor exactly
+  (33,624.77 m3/yr, 104,462.175 ha).
+- Full gate: ruff, 98 tests, sphinx docs, build, twine all green.
+  `ROADMAP.md` P3 complete; validation-report Phase 3 entry appended.
+
+## 0.1.0a1-pre — 2026-08-14
+
 Phase 2 (economic valuation layer) complete on `feature/p2-economy`; PR to
 `main` pending.
 

@@ -222,3 +222,205 @@ isolate the mechanism; the divergence is expected, not a defect.
 Open items: per-stand revenue by grade within the LP (flat sawlog-basis for
 v0.1.0a1); fhops system cost as the LP harvest-cost basis (currently $45
 calibration flat) — both flagged for later phases.
+
+# FUCHS Validation Report (Phase 3: Full-MC Scenario Engine)
+
+Phase 3 verification and calibration records. Companion to
+`v0.1.0a1-plan.md`.
+
+## Environment (P3, locked)
+
+- Same Python 3.12.3 venv as Phases 1-2; ws3/femic/fhops unchanged.
+- Bundle and fragments as Phase 1. fresh-salvage is reference only and NOT
+  installed in this environment; parity is asserted against reference values
+  carried in `src/fresh_fuchs/scenario/fire.py`.
+
+## P3.1 Fire dynamics (calibration record)
+
+Constants and dynamics reimplemented in `scenario/fire.py` with the
+fresh-salvage reference cited (no import):
+
+- MFRI by BEC zone: SBPS 100, IDF 200, MS 150, ESSF 200, ICH 250, SBS 125;
+  annual burn probability `1/MFRI`; burned-decay retention 0.85/yr.
+- Severity ladder (fresh-salvage `SEVERITY_TO_BURNED_FRAC`): Unburned 0.0,
+  Low 0.30, Moderate 0.60, High 0.85; tsa29mini has no burn-severity
+  polygons, so severity is a scenario parameter (default Moderate).
+- Annual ordering contract harvest -> fire -> salvage -> decay: burn influx
+  `R * V_rem[t]`, salvage ceiling `B[t-1] + BURN_IN[t]`, burned balance
+  `(B + BURN_IN - S) * 0.85`.
+- 10-year period burn probability `1 - (1 - R)^10` (SBPS ~0.0956, IDF
+  ~0.0489).
+
+Zone coverage (tsa29mini `au_table.csv`, 21 AUs): 12 IDF + 9 SBPS via the
+`{BEC}_{species}` stratum codes; unmapped zones fail fast
+(`UnknownBurnRateError`). The full MFRI ladder is carried so future bundles
+with more zones work unchanged.
+
+Parity: 14 unit tests assert the reference values and the dynamics ordering;
+the full suite is 68 tests.
+
+## P3.2 Distribution framework (calibration record)
+
+`scenario/distributions.py` provides the parameter-distribution registry with
+seed control:
+
+- Families: `fixed` (deterministic value), `gaussian` (mean/std), `empirical`
+  (sample uniformly from a provided array). Field validation per family.
+- Seeding: every draw funnels through `numpy.random.default_rng`; a full
+  vector draw under one master seed is bit-stable (dimensions drawn in
+  declaration order).
+- `UncertaintyVector` maps `UncertaintyDimension` (fire_burn_rate, price) to
+  a `ParameterDistribution`, meeting the notes' fire + price vector
+  requirement (only fire active in v0.1.0a1).
+- nemora integration: `nemora_sample_distribution` delegates to
+  `nemora.sampling.sample_distribution` with a seeded generator, gated by
+  `MissingDependencyError` when nemora is absent (it is not installed here;
+  the empirical family samples its own array, whose Phase 4 source is
+  nemora's bootstrap).
+
+## P3.3 Scenario records and generator (calibration record)
+
+`scenario/records.py`:
+
+- `FireEvent` (period, BEC zone, annual burn rate in [0,1], severity tier)
+  with per-family validation; `DisturbanceScenario` (name, seed,
+  probability, burn-rate multiplier, price factor, severity, events) with
+  `to_dict` in the ws3 `StochasticScenario` shape and a `from_dict`
+  round-trip.
+- `generate_scenarios(params)` draws each scenario's uncertainty vector
+  (P3.2) under `master_seed + i`, then expands deterministic zone rates
+  (SBPS 0.01, IDF 0.005) into per-period events in sorted-zone x period
+  order. Seed-fixed catalogues are bit-stable (asserted in tests); a
+  scenario catalogue writer emits JSON with provenance.
+- Record count: 85 tests total.
+
+## P3.4 Fire in the ws3 model (verification record)
+
+`scenario/fire_lp.py`:
+
+- Fire enters the Model I even-flow/NPV LP as **path-dependent
+  coefficients**, not extra burn decisions: per-period survival
+  `product_{u<t}(1-p(u))` since last regeneration (harvest/salvage resets
+  the stand); green harvest volume = `Y(a_t) x survival_to(t)`; burn influx
+  = `p(t) x exposed live` (0 in harvest periods: harvest precedes fire);
+  salvageable = `severity_fraction x p(t) x exposed`.
+- `salvage` is a real Model I action (regeneration transition to age 0).
+  Operability is pruned per (zone, period) where burn probability = 0
+  (`apply_salvage_operability`) and floored at `min_salvage_age = 60`
+  (`add_salvage_action`), which also bounds Model I tree growth: a salvaged
+  cohort only reopens the salvage branch once back above rotation age.
+- Salvage feasibility row `salvage_vol(t) - salvageable_vol(t) <= 0` is an
+  explicit general row (`cgen` ub=0). Salvage is a free LP decision at the
+  P2.4 margins: default negative SPF margin (-11.95) -> the LP salvages
+  nothing (matching the fresh-salvage reference agent); a positive
+  (subsidised) margin exercises the mechanism. Salvage-priority forcing
+  rows are documented out of scope (degenerate: a forced salvage
+  regenerates the stand, so a priority floor collapses to "salvage
+  everything immediately").
+- The walk (`path_fire_steps`) reads per-ha `totvol` yields from
+  `ycomp[age]` scaled by the initial cohort area, so it is independent of
+  the model's transient applied-action state and works both at tree-build
+  time and post-solve.
+- Tests (`tests/test_fire_lp.py`, 8): survival compounds across null
+  periods and resets after harvest/salvage; salvage <= burned pool on all
+  paths; fire-free seed reproduces the volume-max baseline under a uniform
+  zero-discount surface; fire strictly reduces the NPV objective; salvage
+  feasibility + economics govern (negative margin -> 0 salvage, positive
+  margin -> salvage up to pool); missing zone mapping fails fast.
+- Real-bundle LP size (tsa29mini, 213 dtypes, every zone burning every
+  period): h=20 -> 377k vars / ~6 min build; h=30 extrapolates to ~1-4M
+  vars / tens of minutes build+solve. Dense-burn scenarios are the
+  computational worst case; stochastic catalogue scenarios (clustered
+  events) are cheaper. Baseline (no salvage) h=30 = 773k vars / ~4 min.
+- Record count: 91 tests total.
+
+## P3.5 Scenario -> LP pipeline (verification record)
+
+`scenario/pipeline.py`:
+
+- `run_scenario_lp` boots a fresh ws3 model per scenario (cheap), registers
+  the salvage action, applies scenario operability, builds the fire-aware
+  LP (`add_fire_problem`), solves/applies it, and records the schedule +
+  total NPV + status as a `ScenarioRunRecord` (per-period harvest/salvage/
+  salvageable/growing-stock table).
+- `run_scenario_pipeline` solves scenarios sequentially or over a process
+  pool using the **spawn** start method: the parent process is
+  multi-threaded (solver/OpenMP state) and forking it would be unsafe
+  (forking first crashed the worker). Each scenario solves from its own
+  fresh model under fixed seeds, so parallel results are bit-identical to
+  the sequential run (asserted in tests).
+- `write_pipeline_record` emits `pipeline_run.json` (scenarios + per-scenario
+  schedules + NPV + environment: python/fresh-fuchs/ws3/solver versions),
+  one `scenario_XXXX_schedule.csv` per scenario, and a
+  `pipeline_summary.csv`.
+- Salvage area is reported from the same leaf accounting as salvage volume
+  (weighted by solved path fractions), so objective-neutral degenerate
+  salvage branches do not inflate the area report; volume and area are
+  consistent (0 salvage volume -> 0 salvage area).
+- CLI `scenario-run` wires the whole command: builds `zone_by_au` from the
+  bundle au_table stratum prefixes, `zone_burn_rates = 1/MFRI` per present
+  zone, a seed-fixed Gaussian burn-multiplier catalogue, then the pipeline.
+- Real-bundle smoke (tsa29mini, h=8, 2 scenarios, 2 workers): both optimal,
+  NPV 19.71M / 19.74M, mean annual harvest ~50k m3/yr, salvage 0 at the
+  default negative margin, salvageable pools tracked per period. Real-bundle
+  LP size: h=8 ~141k vars (~1 min build); h=20 ~377k vars (~6 min);
+  h=24+ grows to tens of minutes per scenario (all-periods burn worst
+  case) — bounds the full-MC catalogue size at h=30; fire-free (p=0)
+  scenarios are cheap (~4 min at h=30, the P3.6 reproduction anchor).
+- Tests (`tests/test_pipeline.py`, 4): record shape; parallel (2 workers)
+  bit-matches sequential; scenarios actually differ in burn draw; record
+  writer emits JSON + CSVs.
+- Record count: 95 tests total.
+
+## P3.6 Acceptance (verification record)
+
+`tests/test_phase3_acceptance.py` (3 tests, public-safe synthetic):
+
+- `test_pipeline_fire_free_reproduces_volume_max_baseline`: fire-free
+  scenario through the full P3.5 pipeline (`run_scenario_lp`, zero-discount
+  uniform surface) reproduces the deterministic even-flow volume-max
+  schedule exactly (per-period harvest to 1e-6); salvage volume zero.
+  (The P3.4 LP-level fire-free equivalence test remains in
+  `test_fire_lp.py`.)
+- `test_burn_rate_monotone_decreases_npv`: burn multiplier
+  0.0/0.5/1.0/2.0 (same seed, all periods, both zones) -> total NPV
+  strictly decreasing.
+- `test_pipeline_seed_fixed_runs_bit_stable`: two pipeline runs under the
+  same master seed produce identical run records (bit-stable, deterministic
+  solver path).
+
+Recorded real-bundle evidence (needs private data; not part of the test
+suite):
+
+- Fire-free h=30 (tsa29mini, no events): reproduces the P2.5 NPV-max anchor
+  exactly — mean annual harvest 33,624.77 m3/yr, total harvested area
+  104,462.175 ha, per-period diffs < 1e-6 vs `outputs/tsa29mini/npv_30.csv`
+  (NPV objective 19.62M; build+solve ~13.6 min; the fire-free LP is the
+  same even-flow + NPV LP with a zero salvage-feasibility row).
+- Monotonicity h=8 (all zones burning, four burn multipliers):
+
+  | mult | status | NPV (z) | harvest m3/yr | harvested ha | salvageable m3 |
+  | --- | --- | --- | --- | --- | --- |
+  | 0.0 | optimal | 23,350,932 | 49,596 | 40,768 | 0 |
+  | 0.5 | optimal | 21,557,788 | 49,803 | 40,657 | 123,462 |
+  | 1.0 | optimal | 19,899,102 | 50,033 | 40,424 | 243,092 |
+  | 2.0 | optimal | 16,941,297 | 50,128 | 40,318 | 468,926 |
+
+  Expected NPV strictly decreases with burn rate; salvageable pool grows
+  monotonically; green even-flow held (harvest level rises slightly as the
+  standing merchantable pool grows and salvage remains at the default
+  negative margin).
+- Salvage area/volume consistency re-checked on the h=8 two-scenario CLI
+  run: period-8 salvage_area 0.0 with salvage_volume 0.0 (leaf accounting
+  excludes objective-neutral degenerate salvage branches), salvageable pool
+  tracked separately.
+
+Record count: 98 tests total; ruff, docs, build, twine green.
+
+- CI compatibility fix (ws3 1.0.5, PyPI — the version CI installs):
+  `apply_salvage_operability` originally recorded closed fire-free periods
+  as `operability["salvage"][period] = None`, which PyPI ws3 1.0.5's
+  `is_operable`/`operable_ages` cannot unpack (TypeError); the local
+  editable ws3 1.1.0a4 tolerates it. Closed periods now use the empty age
+  window `(0, -1)`, which both ws3 versions treat as closed. Full suite
+  passes against both ws3 1.0.5 and 1.1.0a4.
