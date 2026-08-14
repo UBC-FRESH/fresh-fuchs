@@ -48,8 +48,15 @@ def _compile_path_caa(
 def add_even_flow_problem(
     model: ws3.forest.ForestModel,
     config: BaselineConfig,
+    *,
+    policy: Any = None,
+    species_by_dtk: dict[Any, Any] | None = None,
 ) -> Any:
-    """Add the volume-max even-flow LP to ``model`` and return the problem."""
+    """Add the volume-max even-flow LP to ``model`` and return the problem.
+
+    With ``policy`` (a :class:`fresh_fuchs.outer.records.PolicyRecord`), the
+    policy's composition/AAC general rows are folded into the problem.
+    """
     expr = config.product
 
     def coeff_c_z(fm, path):
@@ -62,6 +69,16 @@ def add_even_flow_problem(
         "z": coeff_c_z,
         "cflw_hv": coeff_c_caa,
     }
+    cgen_data: dict[str, dict[str, Any]] | None = None
+    if policy is not None:
+        from fresh_fuchs.outer.policy import policy_cgen_data, policy_coeff_funcs
+
+        if policy.composition_targets and species_by_dtk is None:
+            raise ValueError("composition targets require species_by_dtk")
+        coeff_funcs.update(policy_coeff_funcs(policy, species_by_dtk=species_by_dtk or {}))
+        cgen_data = policy_cgen_data(
+            policy, period_length=model.period_length, periods=model.periods
+        )
     cflw_e = {
         "cflw_hv": (
             {p: config.flow_coefficient for p in model.periods},
@@ -72,7 +89,7 @@ def add_even_flow_problem(
         name=config.name,
         coeff_funcs=coeff_funcs,
         cflw_e=cflw_e,
-        cgen_data=None,
+        cgen_data=cgen_data,
         acodes=config.action_codes,
         sense=ws3.opt.SENSE_MAXIMIZE,
         mask=config.mask,

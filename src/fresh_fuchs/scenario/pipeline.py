@@ -16,6 +16,7 @@ import multiprocessing
 import platform
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import ws3
@@ -31,6 +32,7 @@ from fresh_fuchs.instance import (
     summarize,
 )
 from fresh_fuchs.instance.species import SpeciesClass
+from fresh_fuchs.outer.records import HarvestPolicyMode
 from fresh_fuchs.scenario.fire_lp import (
     FireLpConfig,
     add_fire_problem,
@@ -89,11 +91,19 @@ def _run_scenario_worker(
         dict[int, str],
         int,
         int,
+        Any,
     ],
 ) -> ScenarioRunRecord:
-    config, scenario, surface, species_by_dtk, zone_by_au, max_initial_age, min_salvage_age = (
-        payload
-    )
+    (
+        config,
+        scenario,
+        surface,
+        species_by_dtk,
+        zone_by_au,
+        max_initial_age,
+        min_salvage_age,
+        policy,
+    ) = payload
     return run_scenario_lp(
         config=config,
         scenario=scenario,
@@ -102,6 +112,7 @@ def _run_scenario_worker(
         zone_by_au=zone_by_au,
         max_initial_age=max_initial_age,
         min_salvage_age=min_salvage_age,
+        policy=policy,
     )
 
 
@@ -114,18 +125,27 @@ def run_scenario_lp(
     zone_by_au: dict[int, str],
     max_initial_age: int = 436,
     min_salvage_age: int = 60,
+    policy: Any | None = None,
 ) -> ScenarioRunRecord:
     """Build, solve, and apply the inner LP for one scenario (full foresight).
 
     The model is bootstrapped fresh per scenario (cheap) because the salvage
     action/operability mutate the model; the expensive Model I tree build is
-    scenario-specific and parallelized by the pipeline runner.
+    scenario-specific and parallelized by the pipeline runner. With
+    ``policy`` (an outer ``PolicyRecord``), rotation constraints are applied
+    before the tree build and the policy's general rows are folded into the
+    fire LP.
     """
     model = prepare_optimization(
         bootstrap_model(config), max_initial_age=max_initial_age, config=config
     )
     model = add_salvage_action(model, max_age=config.max_age, min_salvage_age=min_salvage_age)
     model = apply_salvage_operability(model, scenario=scenario, zone_by_au=zone_by_au)
+    if policy is not None and policy.harvest_policy is not None:
+        if policy.harvest_policy.mode is HarvestPolicyMode.ROTATION_CONSTRAINTS:
+            from fresh_fuchs.outer.policy import apply_rotation_constraints
+
+            model = apply_rotation_constraints(model, policy=policy, species_by_dtk=species_by_dtk)
     fire_config = FireLpConfig(workers=1, zone_by_au=zone_by_au, min_salvage_age=min_salvage_age)
     problem = add_fire_problem(
         model,
@@ -133,6 +153,7 @@ def run_scenario_lp(
         scenario=scenario,
         surface=surface,
         species_by_dtk=species_by_dtk,
+        policy=policy,
     )
     results = solve_fire_lp(model, problem, scenario=scenario, config=fire_config)
     status = problem.status()
@@ -178,6 +199,7 @@ def run_scenario_pipeline(
     max_initial_age: int = 436,
     min_salvage_age: int = 60,
     n_workers: int = 1,
+    policy: Any | None = None,
 ) -> PipelineRunRecord:
     """Run the inner LP once per scenario, sequential or process-pool.
 
@@ -185,7 +207,8 @@ def run_scenario_pipeline(
     created with the ``spawn`` start method: the parent process is typically
     multi-threaded (solver/OpenMP state), and forking it would be unsafe.
     Because each scenario is solved from its own fresh model under fixed
-    seeds, parallel results are bit-identical to the sequential run.
+    seeds, parallel results are bit-identical to the sequential run. With
+    ``policy``, the outer policy constraints are applied to every scenario.
     """
     kwargs = dict(
         config=config,
@@ -194,6 +217,7 @@ def run_scenario_pipeline(
         zone_by_au=zone_by_au,
         max_initial_age=max_initial_age,
         min_salvage_age=min_salvage_age,
+        policy=policy,
     )
     records: list[ScenarioRunRecord]
     if n_workers <= 1:
@@ -208,6 +232,7 @@ def run_scenario_pipeline(
                 zone_by_au,
                 max_initial_age,
                 min_salvage_age,
+                policy,
             )
             for scenario in scenarios
         ]

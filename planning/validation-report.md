@@ -424,3 +424,45 @@ Record count: 98 tests total; ruff, docs, build, twine green.
   editable ws3 1.1.0a4 tolerates it. Closed periods now use the empty age
   window `(0, -1)`, which both ws3 versions treat as closed. Full suite
   passes against both ws3 1.0.5 and 1.1.0a4.
+
+## P4.1 Outer policy records and constraints (verification record)
+
+`src/fresh_fuchs/outer/records.py` (CompositionTarget, HarvestPolicy,
+HarvestPolicyMode, PolicyRecord) and `src/fresh_fuchs/outer/policy.py`
+(coeff/cgen row builders, `apply_rotation_constraints`), wired into
+`add_even_flow_problem` (baseline) and `add_fire_problem` (fire-aware)
+plus `run_scenario_lp`/`run_scenario_pipeline` (policy threaded through
+the parallel payload as element 8). `tests/test_outer_policy.py` (6 tests):
+
+- `test_composition_target_binds_species_mix`: a 90%±5% PL composition
+  target (composition-only policy, no harvest policy) forces the harvested
+  area mix to PL — solver optimal, PL share 0.90 within [0.85, 0.95].
+- `test_aac_proxy_pins_harvest_volume`: AAC row pins every period's
+  harvest volume to the policy band upper edge (binding: each period hits
+  `aac * period_length * (1 + tolerance)` to 1e-6). AAC level derived from
+  the no-policy baseline mean annual harvest (~1,550 m3/yr); naive levels
+  (e.g. 30,000 or 40,000 m3/yr) are infeasible for the synthetic fixture
+  and were replaced by baseline-anchored levels.
+- `test_rotation_floor_binds_pl_harvest_age`: rotation floor 140 for PL
+  removes all PL harvest — the no-policy schedule harvests young PL
+  (ages < 140) while the constrained schedule never does (LP skips PL
+  entirely rather than cut it early). Floor semantics implemented as
+  operability windows `dt.operability["harvest"][period] = (floor,
+  ceiling)` so they work on both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+- `test_rotation_floor_ceiling_bounds_harvest_age`,
+  `test_records_validate`, `test_records_frozen` (record validation and
+  immutability).
+- `test_policy_flows_through_fire_pipeline`: composition targets fold
+  into the fire-aware LP via `run_scenario_lp` (burning scenario, salvage
+  path) — optimal with non-negative per-period harvest.
+
+Design records: composition rows are scenario-independent (share of
+harvested area per period, per-species cohorts via `path[0].data("area")`
+and `species_by_dtk`); AAC row uses raw (pre-fire) per-period harvest
+volume so it matches the reported `harvest_volume_m3` in both LPs.
+Rotation constraints are applied to the model before tree build. Outer
+policies are immutable records with provenance; `harvest_policy` is
+optional (composition-only policies allowed).
+
+Record count: 101 tests total; ruff, docs, build, twine green; the P4.1
+suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).

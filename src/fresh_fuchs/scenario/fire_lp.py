@@ -422,12 +422,16 @@ def add_fire_problem(
     scenario: DisturbanceScenario,
     surface: EconomicSurface,
     species_by_dtk: dict[DevelopmentTypeKey, SpeciesClass],
+    policy: Any = None,
 ) -> Any:
     """Add the fire-aware even-flow LP for one scenario and return the problem.
 
     The model must already have the ``salvage`` action registered
     (:func:`add_salvage_action`) and its operability applied
-    (:func:`apply_salvage_operability`).
+    (:func:`apply_salvage_operability`). With ``policy`` (an outer
+    ``PolicyRecord``), the policy's composition/AAC general rows are folded
+    into the problem; ``rotation_constraints`` mode must be applied to the
+    model first (:func:`fresh_fuchs.outer.policy.apply_rotation_constraints`).
     """
     coeff_funcs: dict[str, Any] = {
         "z": lambda fm, path: _compile_path_z(
@@ -466,6 +470,17 @@ def add_fire_problem(
                 "ub": {t: 0.0 for t in model.periods},
             }
         }
+    if policy is not None:
+        from fresh_fuchs.outer.policy import policy_cgen_data, policy_coeff_funcs
+
+        coeff_funcs.update(policy_coeff_funcs(policy, species_by_dtk=species_by_dtk))
+        policy_rows = policy_cgen_data(
+            policy, period_length=model.period_length, periods=model.periods
+        )
+        if cgen_data is None:
+            cgen_data = policy_rows
+        else:
+            cgen_data.update(policy_rows)
     return model.add_problem(
         name=config.name,
         coeff_funcs=coeff_funcs,
