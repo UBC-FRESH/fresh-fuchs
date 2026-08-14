@@ -371,3 +371,48 @@ seed control:
   bit-matches sequential; scenarios actually differ in burn draw; record
   writer emits JSON + CSVs.
 - Record count: 95 tests total.
+
+## P3.6 Acceptance (verification record)
+
+`tests/test_phase3_acceptance.py` (3 tests, public-safe synthetic):
+
+- `test_pipeline_fire_free_reproduces_volume_max_baseline`: fire-free
+  scenario through the full P3.5 pipeline (`run_scenario_lp`, zero-discount
+  uniform surface) reproduces the deterministic even-flow volume-max
+  schedule exactly (per-period harvest to 1e-6); salvage volume zero.
+  (The P3.4 LP-level fire-free equivalence test remains in
+  `test_fire_lp.py`.)
+- `test_burn_rate_monotone_decreases_npv`: burn multiplier
+  0.0/0.5/1.0/2.0 (same seed, all periods, both zones) -> total NPV
+  strictly decreasing.
+- `test_pipeline_seed_fixed_runs_bit_stable`: two pipeline runs under the
+  same master seed produce identical run records (bit-stable, deterministic
+  solver path).
+
+Recorded real-bundle evidence (needs private data; not part of the test
+suite):
+
+- Fire-free h=30 (tsa29mini, no events): reproduces the P2.5 NPV-max anchor
+  exactly — mean annual harvest 33,624.77 m3/yr, total harvested area
+  104,462.175 ha, per-period diffs < 1e-6 vs `outputs/tsa29mini/npv_30.csv`
+  (NPV objective 19.62M; build+solve ~13.6 min; the fire-free LP is the
+  same even-flow + NPV LP with a zero salvage-feasibility row).
+- Monotonicity h=8 (all zones burning, four burn multipliers):
+
+  | mult | status | NPV (z) | harvest m3/yr | harvested ha | salvageable m3 |
+  | --- | --- | --- | --- | --- | --- |
+  | 0.0 | optimal | 23,350,932 | 49,596 | 40,768 | 0 |
+  | 0.5 | optimal | 21,557,788 | 49,803 | 40,657 | 123,462 |
+  | 1.0 | optimal | 19,899,102 | 50,033 | 40,424 | 243,092 |
+  | 2.0 | optimal | 16,941,297 | 50,128 | 40,318 | 468,926 |
+
+  Expected NPV strictly decreases with burn rate; salvageable pool grows
+  monotonically; green even-flow held (harvest level rises slightly as the
+  standing merchantable pool grows and salvage remains at the default
+  negative margin).
+- Salvage area/volume consistency re-checked on the h=8 two-scenario CLI
+  run: period-8 salvage_area 0.0 with salvage_volume 0.0 (leaf accounting
+  excludes objective-neutral degenerate salvage branches), salvageable pool
+  tracked separately.
+
+Record count: 98 tests total; ruff, docs, build, twine green.
