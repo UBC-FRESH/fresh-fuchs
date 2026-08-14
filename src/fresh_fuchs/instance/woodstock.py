@@ -74,8 +74,7 @@ def write_woodstock_files(
         f.write("*ACTION harvest Y\n")
         f.write("*OPERABLE harvest\n")
         f.write(
-            f"? ? ? ? ? _AGE >= {config.min_harvest_age} "
-            f"and _AGE <= {config.max_harvest_age}\n"
+            f"? ? ? ? ? _AGE >= {config.min_harvest_age} and _AGE <= {config.max_harvest_age}\n"
         )
 
     with open(model_path / f"{config.model_name}.trn", "w") as f:

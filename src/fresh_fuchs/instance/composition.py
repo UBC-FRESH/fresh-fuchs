@@ -29,9 +29,7 @@ def managed_landscape_composition(areas: pd.DataFrame) -> pd.DataFrame:
             "apply_retention_split when building the area records"
         )
     managed = areas.loc[areas["ifm"] == _MANAGED]
-    grouped = (
-        managed.groupby(_SPECIES_COLUMN, observed=True)["area_ha"].sum().reset_index()
-    )
+    grouped = managed.groupby(_SPECIES_COLUMN, observed=True)["area_ha"].sum().reset_index()
     total = float(grouped["area_ha"].sum())
     if total <= 0.0:
         raise ValueError("managed land base has zero area; cannot compute composition")

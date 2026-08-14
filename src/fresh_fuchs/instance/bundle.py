@@ -77,8 +77,7 @@ def load_fragments(fragments_path: Path) -> pd.DataFrame:
         import geopandas as gpd
     except ImportError as exc:  # pragma: no cover - exercised via optional extra
         raise MissingDependencyError(
-            "geopandas is required to read the fragments shapefile; install "
-            "the 'bundle' extra."
+            "geopandas is required to read the fragments shapefile; install the 'bundle' extra."
         ) from exc
 
     fragments = gpd.read_file(fragments_path)

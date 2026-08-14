@@ -103,8 +103,7 @@ def build_model(config: InstanceConfig) -> tuple[ws3.forest.ForestModel, dict[st
         "managed_area_ha": managed_area_ha(areas),
         "species_by_au": {int(k): str(v) for k, v in species_by_au.items()},
         "managed_species_composition": {
-            str(row["species"]): float(row["share"])
-            for _, row in composition.iterrows()
+            str(row["species"]): float(row["share"]) for _, row in composition.iterrows()
         },
         "files": [str(path) for path in written],
         "horizon": config.horizon,
