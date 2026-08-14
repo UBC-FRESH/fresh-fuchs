@@ -756,3 +756,32 @@ Findings (synthetic instance, thin fire tail at horizon 2):
 
 Record count: 141 tests total (139 + 2 convergence); ruff, docs, build,
 twine green.
+
+## Dynamic inconsistency of the inner LP (post-v0.1.0a1 finding)
+
+Raised after the v0.1.0a1 release (Daugherty 1991 reference). The inner LP
+(maximize discounted NPV subject to an even-flow harvest-volume constraint)
+is an open-loop formulation and is **dynamically inconsistent**: its
+open-loop tail is not what a future planner re-solving from the realized
+state under the same goals would choose, so the long-horizon projections —
+and the outer-layer NPV distributions and policy rankings built on them —
+are not credible as intertemporal plans.
+
+Sequential-replanning test on the public-safe synthetic instance
+(`tests/test_dynamic_inconsistency.py`): the period-1 -> 2 transition is
+followed, but the periods-3+ tail diverges by ~9.5% of volume on replan. The
+divergence is **identical at 0% and 3% discount**, so on this instance the
+driver is the even-flow band's replanning asymmetry, **not** the discount
+rate (consistent with Daugherty's finding that the discount factor drops out
+of the consistency requirements). The synthetic instance is a lower bound
+(flat prices, near-equilibrium structure, no negatively-valued strata); the
+real bundle is expected to show larger inconsistency.
+
+Full analysis, caveats, and design options (consistent/subgame-perfect
+formulation, regeneration-requirement precommitment, receding-horizon
+replanning) are in `planning/dynamic-inconsistency-note.md`. This is a
+documented known limitation and a follow-on research direction, not a
+v0.1.0a1 patch.
+
+Record count: 143 tests total (141 + 2 dynamic-inconsistency
+characterization); ruff, docs, build, twine green.
