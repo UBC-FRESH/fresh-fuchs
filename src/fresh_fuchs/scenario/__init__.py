@@ -53,6 +53,14 @@ from .fire_lp import (
     salvage_volumes_from_solution,
     solve_fire_lp,
 )
+from .pipeline import (
+    PipelineRunRecord,
+    ScenarioRunPeriod,
+    ScenarioRunRecord,
+    run_scenario_lp,
+    run_scenario_pipeline,
+    write_pipeline_record,
+)
 from .records import (
     DisturbanceScenario,
     FireEvent,
@@ -74,8 +82,11 @@ __all__ = [
     "MFRI_YEARS_BY_ZONE",
     "MissingDependencyError",
     "ParameterDistribution",
+    "PipelineRunRecord",
     "SEVERITY_TO_BURNED_FRAC",
     "ScenarioGenerationParams",
+    "ScenarioRunPeriod",
+    "ScenarioRunRecord",
     "UncertaintyDimension",
     "UncertaintyVector",
     "UnknownBurnRateError",
@@ -98,11 +109,14 @@ __all__ = [
     "nemora_sample_distribution",
     "path_fire_steps",
     "period_burn_probability",
+    "run_scenario_lp",
+    "run_scenario_pipeline",
     "salvage_volumes_from_solution",
     "salvageable_volume",
     "sample_distribution",
     "severity_burned_fraction",
     "simulate_cohort_years",
     "solve_fire_lp",
+    "write_pipeline_record",
     "write_scenario_catalogue",
 ]

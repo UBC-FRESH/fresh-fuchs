@@ -389,6 +389,27 @@ def _compile_path_salvage_feas(
     }
 
 
+def _compile_path_salvage_area(
+    fm: ws3.forest.ForestModel,
+    path: Any,
+    *,
+    scenario: DisturbanceScenario,
+    config: FireLpConfig,
+) -> dict[int, float]:
+    """Salvaged cohort area by period (leaf row for schedule accounting).
+
+    Reported from the same leaf accounting as the salvage volume (not
+    ``compile_product``), so degenerate zero-pool salvage branches that the
+    LP may mix in as objective-neutral do not inflate the area report.
+    """
+    cohort_area = float(path[0].data("area"))
+    return {
+        step.period: cohort_area
+        for step in path_fire_steps(fm, path, scenario=scenario, zone_by_au=config.zone_by_au)
+        if step.acode == "salvage" and step.salvaged != 0.0
+    }
+
+
 def add_fire_problem(
     model: ws3.forest.ForestModel,
     config: FireLpConfig,
@@ -417,6 +438,9 @@ def add_fire_problem(
             fm, path, scenario=scenario, config=config
         ),
         "salvageable_vol": lambda fm, path: _compile_path_salvageable_vol(
+            fm, path, scenario=scenario, config=config
+        ),
+        "salvage_area": lambda fm, path: _compile_path_salvage_area(
             fm, path, scenario=scenario, config=config
         ),
         "salvage_feas": lambda fm, path: _compile_path_salvage_feas(
@@ -457,14 +481,16 @@ def salvage_volumes_from_solution(
     scenario: DisturbanceScenario,
     config: FireLpConfig,
 ) -> dict[str, dict[int, float]]:
-    """Per-period salvaged and salvageable volumes from the LP solution.
+    """Per-period salvaged/salvageable volumes and salvaged area.
 
     Iterates the Model I leaves and their stored ``salvage_vol`` /
-    ``salvageable_vol`` rows, weighted by the solved path fractions. Returns
-    ``{"salvaged": {period: m3}, "salvageable": {period: m3}}``.
+    ``salvageable_vol`` / ``salvage_area`` rows, weighted by the solved path
+    fractions. Returns ``{"salvaged": {period: m3}, "salvageable": {period:
+    m3}, "salvaged_area": {period: ha}}``.
     """
     salvaged: dict[int, float] = {t: 0.0 for t in model.periods}
     salvageable: dict[int, float] = {t: 0.0 for t in model.periods}
+    salvaged_area: dict[int, float] = {t: 0.0 for t in model.periods}
     for (_i, _j), tree in (problem.trees or {}).items():
         for path in tree.paths():
             leaf_id = path[-1].data("leaf_id")
@@ -476,7 +502,13 @@ def salvage_volumes_from_solution(
                 salvaged[t] += fraction * vol
             for t, vol in path[-1].data("salvageable_vol").items():
                 salvageable[t] += fraction * vol
-    return {"salvaged": salvaged, "salvageable": salvageable}
+            for t, area in path[-1].data("salvage_area").items():
+                salvaged_area[t] += fraction * area
+    return {
+        "salvaged": salvaged,
+        "salvageable": salvageable,
+        "salvaged_area": salvaged_area,
+    }
 
 
 def solve_fire_lp(
@@ -493,10 +525,8 @@ def solve_fire_lp(
     salvage-feasibility accounting (salvaged vs salvageable per period).
     """
     frame = solve_even_flow(model, problem)
-    frame["salvage_area_ha"] = [
-        model.compile_product(p, "1.", acode="salvage") for p in model.periods
-    ]
     accounting = salvage_volumes_from_solution(model, problem, scenario=scenario, config=config)
+    frame["salvage_area_ha"] = [accounting["salvaged_area"].get(p, 0.0) for p in model.periods]
     frame["salvage_volume_m3"] = [accounting["salvaged"].get(p, 0.0) for p in model.periods]
     frame["salvageable_volume_m3"] = [accounting["salvageable"].get(p, 0.0) for p in model.periods]
     return frame

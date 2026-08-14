@@ -333,3 +333,41 @@ seed control:
   computational worst case; stochastic catalogue scenarios (clustered
   events) are cheaper. Baseline (no salvage) h=30 = 773k vars / ~4 min.
 - Record count: 91 tests total.
+
+## P3.5 Scenario -> LP pipeline (verification record)
+
+`scenario/pipeline.py`:
+
+- `run_scenario_lp` boots a fresh ws3 model per scenario (cheap), registers
+  the salvage action, applies scenario operability, builds the fire-aware
+  LP (`add_fire_problem`), solves/applies it, and records the schedule +
+  total NPV + status as a `ScenarioRunRecord` (per-period harvest/salvage/
+  salvageable/growing-stock table).
+- `run_scenario_pipeline` solves scenarios sequentially or over a process
+  pool using the **spawn** start method: the parent process is
+  multi-threaded (solver/OpenMP state) and forking it would be unsafe
+  (forking first crashed the worker). Each scenario solves from its own
+  fresh model under fixed seeds, so parallel results are bit-identical to
+  the sequential run (asserted in tests).
+- `write_pipeline_record` emits `pipeline_run.json` (scenarios + per-scenario
+  schedules + NPV + environment: python/fresh-fuchs/ws3/solver versions),
+  one `scenario_XXXX_schedule.csv` per scenario, and a
+  `pipeline_summary.csv`.
+- Salvage area is reported from the same leaf accounting as salvage volume
+  (weighted by solved path fractions), so objective-neutral degenerate
+  salvage branches do not inflate the area report; volume and area are
+  consistent (0 salvage volume -> 0 salvage area).
+- CLI `scenario-run` wires the whole command: builds `zone_by_au` from the
+  bundle au_table stratum prefixes, `zone_burn_rates = 1/MFRI` per present
+  zone, a seed-fixed Gaussian burn-multiplier catalogue, then the pipeline.
+- Real-bundle smoke (tsa29mini, h=8, 2 scenarios, 2 workers): both optimal,
+  NPV 19.71M / 19.74M, mean annual harvest ~50k m3/yr, salvage 0 at the
+  default negative margin, salvageable pools tracked per period. Real-bundle
+  LP size: h=8 ~141k vars (~1 min build); h=20 ~377k vars (~6 min);
+  h=24+ grows to tens of minutes per scenario (all-periods burn worst
+  case) — bounds the full-MC catalogue size at h=30; fire-free (p=0)
+  scenarios are cheap (~4 min at h=30, the P3.6 reproduction anchor).
+- Tests (`tests/test_pipeline.py`, 4): record shape; parallel (2 workers)
+  bit-matches sequential; scenarios actually differ in burn draw; record
+  writer emits JSON + CSVs.
+- Record count: 95 tests total.
