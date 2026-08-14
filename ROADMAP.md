@@ -12,7 +12,7 @@ synchronized with GitHub issues, planning notes, pull requests, and
 | --- | --- | --- | --- |
 | P0 Skeleton scaffold | TBD | `feature/p0-skeleton-scaffold` | Complete |
 | P1 Instance and model integration | [#1](https://github.com/UBC-FRESH/fresh-fuchs/issues/1) | `feature/p1-instance-model` | Complete (P1.1 [#2](https://github.com/UBC-FRESH/fresh-fuchs/issues/2), P1.2 [#3](https://github.com/UBC-FRESH/fresh-fuchs/issues/3), P1.3 [#4](https://github.com/UBC-FRESH/fresh-fuchs/issues/4), P1.4 [#5](https://github.com/UBC-FRESH/fresh-fuchs/issues/5), P1.5 [#6](https://github.com/UBC-FRESH/fresh-fuchs/issues/6)) |
-| P2 Economic valuation layer | TBD | `feature/p2-economy` | Planned |
+| P2 Economic valuation layer | [#8](https://github.com/UBC-FRESH/fresh-fuchs/issues/8) | `feature/p2-economy` | Complete (P2.1 [#9](https://github.com/UBC-FRESH/fresh-fuchs/issues/9), P2.2 [#10](https://github.com/UBC-FRESH/fresh-fuchs/issues/10), P2.3 [#11](https://github.com/UBC-FRESH/fresh-fuchs/issues/11), P2.4 [#12](https://github.com/UBC-FRESH/fresh-fuchs/issues/12), P2.5 [#13](https://github.com/UBC-FRESH/fresh-fuchs/issues/13), P2.6 [#14](https://github.com/UBC-FRESH/fresh-fuchs/issues/14)) — PR pending |
 | P3 Full-MC scenario engine | TBD | `feature/p3-scenario` | Planned |
 | P4 Outer policy layer | TBD | `feature/p4-outer` | Planned |
 | P5 Orchestration, validation, calibration, release | TBD | `feature/p5-release` | Planned |

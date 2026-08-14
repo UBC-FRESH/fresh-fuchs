@@ -41,9 +41,7 @@ def _compile_path_caa(
         if mask and not fm.match_mask(mask, d["dtk"]):
             continue
         if d["acode"] in acodes:
-            result[t] = fm.compile_product(
-                t, expr, d["acode"], [d["dtk"]], d["age"], coeff=False
-            )
+            result[t] = fm.compile_product(t, expr, d["acode"], [d["dtk"]], d["age"], coeff=False)
     return result
 
 
@@ -186,6 +184,5 @@ def summarize(results: pd.DataFrame, *, period_length: int) -> dict[str, float]:
         "total_harvested_area_ha": float(results["harvest_area_ha"].sum()),
         "total_harvested_volume_m3": float(results["harvest_volume_m3"].sum()),
         "mean_harvest_volume_m3_per_period": float(results["harvest_volume_m3"].mean()),
-        "mean_annual_harvest_m3_per_yr": float(results["harvest_volume_m3"].mean())
-        / period_length,
+        "mean_annual_harvest_m3_per_yr": float(results["harvest_volume_m3"].mean()) / period_length,
     }

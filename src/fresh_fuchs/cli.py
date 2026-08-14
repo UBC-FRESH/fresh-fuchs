@@ -11,6 +11,15 @@ import pandas as pd
 import typer
 
 from fresh_fuchs import __version__
+from fresh_fuchs.economy import (
+    NpvConfig,
+    PriceGroup,
+    add_npv_problem,
+    interior_surface,
+    sawlog_basis_salvage_margin,
+    solve_npv,
+    species_by_dtk_from_areas,
+)
 from fresh_fuchs.instance import (
     BaselineConfig,
     InstanceConfig,
@@ -135,6 +144,57 @@ def species_composition_cmd(
     for _, row in composition.iterrows():
         typer.echo(f"  {row['species']:>4}  {row['area_ha']:,.1f} ha  {row['share']:6.1%}")
     typer.echo(f"Species-aware development-type classes: {len(dts)}")
+
+
+@app.command("economy-run")
+def economy_run_cmd(
+    bundle_dir: Path = typer.Option(..., "--bundle-dir", help="Bundle directory (bundle tables)."),
+    fragments_path: Path = typer.Option(..., "--fragments", help="Fragments shapefile path."),
+    model_path: Path = typer.Option(
+        Path("outputs") / "tsa29mini" / "ws3_woodstock_bootstrap_model",
+        "--model-path",
+        help="Directory with the Woodstock-format sections.",
+    ),
+    model_name: str = typer.Option("tsa29mini", "--model-name"),
+    max_initial_age: int = typer.Option(436, "--max-initial-age"),
+    horizon: int = typer.Option(30, "--horizon", min=1),
+    out_csv: Path | None = typer.Option(None, "--out", help="Write per-period results CSV."),
+) -> None:
+    """Run the NPV-max even-flow LP on the built model (Phase 2)."""
+    config = InstanceConfig(model_name=model_name, model_path=model_path, horizon=horizon)
+    model = prepare_optimization(
+        bootstrap_model(config), max_initial_age=max_initial_age, config=config
+    )
+
+    species_by_au = load_species_by_au(bundle_dir)
+    fragments = load_fragments(fragments_path)
+    areas = apply_retention_split(fragments, species_by_au=species_by_au)
+    species_by_dtk = species_by_dtk_from_areas(areas)
+    surface = interior_surface()
+
+    problem = add_npv_problem(
+        model,
+        NpvConfig(workers=1),
+        surface=surface,
+        species_by_dtk=species_by_dtk,
+    )
+    results = solve_npv(model, problem)
+    summary = summarize(results, period_length=config.period_length)
+
+    typer.echo(f"NPV-max even-flow LP ({surface.discount.annual_rate:.0%} discount):")
+    typer.echo(f"  status: {problem.status()}")
+    typer.echo(f"  mean annual harvest: {summary['mean_annual_harvest_m3_per_yr']:.0f} m3/yr")
+    typer.echo(f"  total harvested area: {summary['total_harvested_area_ha']:.0f} ha")
+    typer.echo("Salvage margin anchors (zero subsidy, sawlog basis, CAD/m3):")
+    typer.echo(f"  SPF: {sawlog_basis_salvage_margin(surface, PriceGroup.SPF):.2f}")
+    typer.echo(f"  Df-Larch: {sawlog_basis_salvage_margin(surface, PriceGroup.DFLARCH):.2f}")
+
+    if out_csv is not None:
+        results["solver"] = "npv-lp"
+        columns = ["solver", "period", "harvest_area_ha", "harvest_volume_m3", "growing_stock_m3"]
+        out_csv.parent.mkdir(parents=True, exist_ok=True)
+        results[columns].to_csv(out_csv, index=False)
+        typer.echo(f"  wrote {out_csv}")
 
 
 @app.command("scenario-run")

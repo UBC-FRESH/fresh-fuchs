@@ -145,3 +145,80 @@ Sensitivity table: `outputs/tsa29mini/p1.4_flow_sensitivity.csv`.
 Open items: Patchworks solve logs/settings for `tsa29mini_patchworks_model`
 are not present in the bundle, so Patchworks' own flow rule cannot be
 confirmed directly; the comparison rests on the reference notebook table.
+
+# FUCHS Validation Report (Phase 2: Economic Valuation Layer)
+
+Phase 2 verification and calibration records. Companion to
+`v0.1.0a1-plan.md`. Commits: implementation `c846f2b`, plan update `44820b7`.
+
+## Environment (P2, locked)
+
+- Same Python 3.12.3 venv as Phase 1; `ws3`/`femic` unchanged.
+- `fhops` installed editable (`pip install -e <ws>/fhops --no-deps`), version
+  1.0.0 (pyomo/pyarrow/optuna not installed; not required by the costing
+  surface). pyproject extra: `fhops = ["fhops>=1.0.0"]`.
+- Bundle and fragments as Phase 1.
+- CI dependency fix: ws3 1.0.5 from PyPI imports `pulp` unconditionally in
+  `ws3.opt.status()` even on the HiGHS path, so `pulp` was added to the core
+  dependencies (the local ws3 source checkout guards the import, which hid
+  the requirement locally).
+
+## P2.1-P2.4 Economic surface records (calibration record)
+
+Constants composed by `economy.interior_surface()` (provenance on every
+record; source `fresh-salvage/planning/economics-calibration.md`, reference
+only, no import; prices at BC Interior Log Market Report Q4-2023 levels):
+
+- SPF sawlog $127/m3 (Df-Larch $103, Hem-Bal $120, Cedar $144, Other $90);
+  per-Product price records for peeler/sawlog/pulpwood.
+- Harvest cost flat $45/m3 (green; carries road/admin/silviculture
+  allocation — replant NOT charged by default, `charge_replant_in_npv`).
+- Transport $30/m3 green, $38 burned; stumpage $15/m3 green, 0.25 x price
+  burned floor; burned-price discount 0.65; burned harvest premium +25%
+  ($56/m3); burned volume decay 0.85/yr; discount rate 0.03 (annual,
+  end-of-period factors); grade transition downgrade-only
+  (Peel {0.55/0.35/0.10}, Saw {0.00/0.80/0.20}, Pulp {1.0}).
+
+fhops alternative harvest cost (default interior stand: 0.3 m3 stems,
+180 m3/ha, 2000 stems/ha, 25% slope; machine-rate provenance + CPI 2024):
+
+- Single feller-buncher pass: $7.15/m3 (felling only — lower bound).
+- 4-pass system (fell/process/skid/load): $23.22/m3 (near the $30-40/m3
+  tree-to-truck range; excludes road/admin/silviculture).
+
+Salvage margins (zero subsidy, sawlog basis, $/m3) reconcile to the
+fresh-salvage anchors:
+
+- SPF sawlog-basis: -11.95 (calibration approx -11.7).
+- SPF transition-mix: -21.31 (fresh-salvage -21..-24 band; asserted in
+  tests). Df-Larch sawlog-basis -27.55 reflects the lower DF price basis and
+  sits outside the SPF-dominated band — recorded, not asserted.
+
+## P2.5 NPV objective in the inner LP (cross-validation)
+
+Synthetic cross-checks (`tests/test_npv.py`, synthetic bundle, no femic):
+
+- Zero discount + no price differential: NPV-max LP reproduces the
+  volume-max schedule EXACTLY (per-period volume and area, series equality).
+- 3% discount + no price differential: NPV-max total volume within 1% of
+  volume-max total.
+
+Real bundle (tsa29mini, 30 x 10-yr periods, 3% discount), `economy-run`
+(`outputs/tsa29mini/npv_30.csv`, `npv_30.log`):
+
+| LP | mean volume (m3/yr) | total area (ha) | volume intensity (m3/ha) | status |
+|----|--------------------|-----------------|--------------------------|--------|
+| volume-max (P1 baseline) | 354,509 | 94,890 | 112.1 | optimal |
+| npv-max (P2, 3% discount) | 336,248 | 104,462 | 96.6 | optimal |
+
+Both LPs bind the even-flow band at both ends (period volumes span
+0.95-1.05 x period 1). The NPV-max shift (5% less volume, 10% more area,
+lower m3/ha) is the first-order effect of the species price differentials
+(SPF net $37/m3 vs Df-Larch net $13/m3 redirect harvest toward SPF/PL
+stands) combined with discounting (period-1 area 3,155 ha at 110 m3/ha vs
+1,707 ha at 212 m3/ha for volume-max). The no-differential cross-checks
+isolate the mechanism; the divergence is expected, not a defect.
+
+Open items: per-stand revenue by grade within the LP (flat sawlog-basis for
+v0.1.0a1); fhops system cost as the LP harvest-cost basis (currently $45
+calibration flat) — both flagged for later phases.
