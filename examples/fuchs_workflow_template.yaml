@@ -1,0 +1,73 @@
+# FUCHS pipeline workflow template (Phase 5, P5.1).
+#
+# One matrix case expands this template per grid point via
+# ${matrix.<var>} substitution. The pipeline runs on the public-safe
+# synthetic fixture, so it is CI-safe; real-bundle runs use the
+# `fresh-fuchs build-model` / `scenario-run` / `policy-grid` CLIs.
+
+workflow:
+  id: fuchs_pipeline
+  name: FUCHS pipeline
+  description: >-
+    build_model -> scenario_run -> policy_grid -> policy_rank on the
+    public-safe synthetic instance.
+
+nodes:
+  - id: build_model
+    provider: fuchs.orchestration.build_model
+    parameters:
+      source: synthetic
+      model_path: model
+      horizon: 2
+
+  - id: scenario_run
+    provider: fuchs.orchestration.scenario_run
+    needs:
+      - build_model
+    parameters:
+      model_path: model
+      horizon: 2
+      n_scenarios: 3
+      master_seed: 42
+      out_dir: scenario_run
+
+  - id: policy_grid
+    provider: fuchs.orchestration.policy_grid
+    needs:
+      - build_model
+    parameters:
+      model_path: model
+      horizon: 2
+      n_scenarios: 3
+      master_seed: 42
+      out_dir: policy_grid
+      grid:
+        name: fuchs_matrix
+        composition_axes:
+          - species: PL
+            values:
+              - "${matrix.pl_share}"
+            tolerance: 0.05
+            provenance:
+              source: orchestration matrix grid
+              as_of: "2026-08-14"
+              units: area share
+              basis: matrix PL area-share sweep
+        include_unconstrained: false
+        provenance:
+          source: orchestration matrix grid
+          as_of: "2026-08-14"
+          units: policy spec
+          basis: matrix-expanded policy grid
+
+  - id: policy_rank
+    provider: fuchs.orchestration.policy_rank
+    needs:
+      - policy_grid
+    inputs:
+      grid_summary: policy_grid/grid_summary.json
+    parameters:
+      grid_summary: policy_grid/grid_summary.json
+      criterion: expected_npv_cvar
+      alpha: 0.95
+      out_dir: policy_rank

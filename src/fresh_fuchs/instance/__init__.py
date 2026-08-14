@@ -35,6 +35,15 @@ from .species import (
     load_species_by_au,
     species_class_for_canfi,
 )
+from .synthetic import (
+    SYNTHETIC_ZONE_BURN_RATES,
+    SYNTHETIC_ZONE_BY_AU,
+    build_synthetic_areas,
+    build_synthetic_model,
+    build_synthetic_yields,
+    synthetic_instance_config,
+    synthetic_species_by_dtk,
+)
 from .types import BaselineConfig, InstanceConfig
 from .woodstock import bootstrap_model, prepare_optimization, write_woodstock_files
 
@@ -43,11 +52,16 @@ __all__ = [
     "CANFI_SPECIES_CLASS",
     "InstanceConfig",
     "MissingDependencyError",
+    "SYNTHETIC_ZONE_BY_AU",
+    "SYNTHETIC_ZONE_BURN_RATES",
     "SpeciesClass",
     "add_even_flow_problem",
     "age_to_midpoint",
     "apply_retention_split",
     "build_model",
+    "build_synthetic_areas",
+    "build_synthetic_model",
+    "build_synthetic_yields",
     "build_woodstock_tables",
     "bootstrap_model",
     "development_type_species",
@@ -61,6 +75,8 @@ __all__ = [
     "solve_even_flow",
     "species_class_for_canfi",
     "summarize",
+    "synthetic_instance_config",
+    "synthetic_species_by_dtk",
     "write_woodstock_files",
 ]
 

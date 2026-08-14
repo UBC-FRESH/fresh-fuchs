@@ -20,6 +20,10 @@ and per-phase scope):
   metrics (Phase 4).
 - ``fresh_fuchs.orchestration`` — freshforge workflows/matrices and evidence
   (Phase 5).
+- ``fresh_fuchs.instance.synthetic`` — public-safe synthetic instance (areas,
+  yields, species/zone maps, ``build_synthetic_model``) shared by the tests,
+  the examples, and the orchestration provider so the whole pipeline is
+  reproducible in CI without private data.
 
 Design invariants:
 
@@ -103,4 +107,75 @@ The default $45/m3 harvest cost already carries a road/admin/silviculture
 allocation, so the per-ha replant cost is NOT charged by default
 (``charge_replant_in_npv``); a later phase can switch to a
 silviculture-exclusive harvest cost and flip replant charging on.
+
+The ``scenario`` engine in detail
+---------------------------------
+
+``scenario-run`` and the ``scenario`` API generate and solve the full-MC
+catalogue:
+
+1. ``fresh_fuchs.scenario.records`` holds the typed ``DisturbanceScenario`` /
+   ``FireEvent`` records and ``ScenarioGenerationParams`` with a per-dimension
+   ``ParameterDistribution`` (Gaussian/fixed, provenance-stamped) uncertainty
+   vector (fire burn-rate multiplier + price factor); ``generate_scenarios``
+   is seed-fixed reproducible.
+2. ``fresh_fuchs.scenario.fire`` carries the MFRI-by-zone burn rates (SBPS
+   100 / IDF 200 / MS 150 / ESSF 200 / ICH 250 / SBS 125; burn probability
+   1/MFRI), the severity ladder (Unburned 0 / Low 0.30 / Moderate 0.60 /
+   High 0.85), burned-volume decay 0.85, and the harvest -> fire -> salvage
+   -> decay ordering.
+3. ``fresh_fuchs.scenario.fire_lp`` encodes fire in the inner Model I LP as
+   path-dependent coefficients (survival, green volume, burn influx,
+   salvageable pool); ``salvage`` is a real Model I action with a salvage
+   feasibility row.
+4. ``fresh_fuchs.scenario.pipeline`` builds/solves/applies the inner LP once
+   per scenario (full foresight), records schedule + NPV + provenance
+   (JSON + CSVs), and parallelizes across scenarios with a spawn process pool
+   (parallel results bit-match sequential).
+
+The ``outer`` policy layer in detail
+------------------------------------
+
+``policy-grid`` / ``policy-rank`` and the ``outer`` API evaluate landscape
+policy risk-sensitively:
+
+1. ``fresh_fuchs.outer.records`` / ``fresh_fuchs.outer.policy`` define
+   ``PolicyRecord`` (species-composition area-share targets with tolerance,
+   plus an optional harvest policy: AAC proxy or rotation-age floor/ceiling)
+   and fold them into the even-flow and fire inner LPs as rows (composition
+   area-share band; AAC volume band; rotation-age operability windows,
+   PyPI-ws3-1.0.5 compatible).
+2. ``fresh_fuchs.outer.grid`` expands a ``PolicyGrid`` into its Cartesian
+   product (plus an optional unconstrained baseline) and evaluates every
+   policy over the scenario catalogue, capturing infeasible points as
+   ``status="failed"`` without sinking the grid.
+3. ``fresh_fuchs.outer.risk`` computes per-policy NPV-distribution metrics:
+   E[NPV], volatility, VaR, CVaR, shortfall probability, and a Gaussian
+   comparison (no scipy dependency).
+4. ``fresh_fuchs.outer.ranking`` / ``fresh_fuchs.outer.report`` rank policies
+   (``E_NPV_CVAR`` lexicographic on (E[NPV], CVaR), or ``MEAN_CVAR`` weighted
+   score, volatility tie-break) with a recommended rank-1 policy, a
+   coarse-vs-fine grid-resolution sensitivity record, and deterministic
+   report artifacts (``ranking.csv/json``, ``report.json``, optional
+   ``tradeoff.png``).
+
+The ``orchestration`` layer in detail
+-------------------------------------
+
+``fresh_fuchs.orchestration`` wraps the pipeline as freshforge
+workflows/matrices with evidence (Phase 5):
+
+- ``FuchsOrchestrationProvider`` (freshforge ``Provider`` protocol) exposes
+  thin node types — ``build_model``, ``scenario_run``, ``policy_grid``,
+  ``policy_rank`` — that call the Python APIs (no duplicated logic).
+  ``fuchs_workflow_spec`` builds the build_model -> scenario_run ->
+  policy_grid -> policy_rank chain; ``run_fuchs_workflow`` executes it with
+  the FUCHS registry and writes a ``workflow_run_evidence_manifest``.
+- ``run_fuchs_matrix`` expands a ``WorkflowMatrixSpec`` over the grid axes
+  (``${matrix.<var>}`` substitution into the workflow template) and executes
+  every case in its own namespace, writing a ``matrix_run_evidence_manifest``.
+- The provider is registered for entry-point discovery under the
+  ``freshforge.providers`` group; freshforge is an optional dependency
+  (``orchestration`` extra), pinned to a commit, and the orchestration tests
+  guard with ``pytest.importorskip``.
 

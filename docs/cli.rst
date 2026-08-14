@@ -12,13 +12,21 @@ The CLI is a thin wrapper over the Python APIs. Commands that have landed:
   by static primary-species class (Phase 1, re-scoped P1.3).
 - ``economy-run`` — solve the NPV-max even-flow LP on a built model using the
   interior economic surface (Phase 2).
+- ``scenario-run`` — generate a seed-fixed full-MC scenario catalogue and
+  solve the inner LP once per scenario (Phase 3).
+- ``policy-grid`` — run the outer policy grid search over the scenario
+  catalogue (Phase 4).
+- ``policy-rank`` — rank a grid run record by the risk criterion and write
+  the report (Phase 4).
 
-Remaining stubs land with their roadmap phases:
+Reserved stubs (post-v0.1.0a1; see ``ROADMAP.md``):
 
-- ``scenario-run`` — generate full-MC scenarios (Phase 3).
-- ``inner-run`` — solve the inner Model I LP (Phases 2-3).
-- ``outer-run`` — evaluate policies on NPV distributions (Phase 4).
-- ``pipeline-run`` — run the end-to-end pipeline (Phase 5).
+- ``inner-run`` — solve a single inner Model I LP (superseded by
+  ``scenario-run``/``policy-grid``, which already solve the inner LP per
+  scenario).
+- ``outer-run`` — single-policy evaluation (superseded by ``policy-grid``).
+- ``pipeline-run`` — convenience end-to-end wrapper (superseded by the
+  freshforge workflow/matrix orchestration in ``fresh_fuchs.orchestration``).
 
 ``build-model``
 ---------------
@@ -123,3 +131,108 @@ Options:
 - ``--max-initial-age`` — oldest initial stand age in the bundle.
 - ``--horizon`` — number of periods.
 - ``--out`` — optional CSV of per-period results.
+
+``scenario-run``
+----------------
+
+Generate a seed-fixed full-MC fire/price scenario catalogue from the bundle
+zones' MFRI annual burn rates and solve the fire-aware even-flow/NPV LP once
+per scenario (full foresight), writing a run record with provenance (JSON +
+per-period schedule CSVs + summary).
+
+.. code-block:: bash
+
+   fresh-fuchs scenario-run \
+     --bundle-dir <bundle>/data/model_input_bundle \
+     --fragments <bundle>/output/patchworks_tsa29mini/fragments/fragments.shp \
+     --model-path outputs/tsa29mini/ws3_woodstock_bootstrap_model \
+     --max-initial-age 436 \
+     --horizon 30 \
+     --n-scenarios 10 \
+     --master-seed 42 \
+     --workers 4 \
+     --out-dir outputs/tsa29mini/scenario_run
+
+Options:
+
+- ``--bundle-dir`` / ``--fragments`` — bundle inputs (required).
+- ``--model-path`` / ``--model-name`` — built model directory / name.
+- ``--max-initial-age`` — oldest initial stand age.
+- ``--horizon`` — number of periods.
+- ``--n-scenarios`` — catalogue size (default 10).
+- ``--master-seed`` — seed fixing the catalogue (default 42); runs are
+  bit-reproducible for a fixed seed.
+- ``--workers`` — process-pool size for the per-scenario solves (spawn
+  start method; parallel results bit-match sequential).
+- ``--out-dir`` — directory for the run record.
+
+``policy-grid``
+---------------
+
+Run the outer policy grid search (Phase 4): expand a ``PolicyGrid`` JSON
+into its Cartesian product (plus an optional unconstrained baseline),
+evaluate every policy over the seed-fixed scenario catalogue through the
+inner LP with the policy rows applied, and write per-policy run records and
+grid summaries. Infeasible grid points are captured as ``status="failed"``
+without sinking the grid.
+
+.. code-block:: bash
+
+   fresh-fuchs policy-grid \
+     --bundle-dir <bundle>/data/model_input_bundle \
+     --fragments <bundle>/output/patchworks_tsa29mini/fragments/fragments.shp \
+     --model-path outputs/tsa29mini/ws3_woodstock_bootstrap_model \
+     --grid-json examples/policy-grid.tsa29mini.json \
+     --max-initial-age 436 \
+     --horizon 30 \
+     --n-scenarios 10 \
+     --master-seed 42 \
+     --scenario-workers 4 \
+     --policy-workers 2 \
+     --out-dir outputs/tsa29mini/policy_grid
+
+Options:
+
+- ``--grid-json`` — ``PolicyGrid`` definition (JSON; see
+  ``examples/policy-grid.tsa29mini.json``) (required).
+- ``--scenario-workers`` / ``--policy-workers`` — nested process pools.
+- ``--out-dir`` — directory for grid records (``grid_summary.csv`` /
+  ``grid_summary.json`` + per-policy runs).
+- The bundle/model/seed options match ``scenario-run``.
+
+``policy-rank``
+---------------
+
+Rank a grid run record by the risk criterion and write the report
+(``ranking.csv`` / ``ranking.json`` / ``report.json``, plus ``tradeoff.png``
+when matplotlib is importable). Reads a ``grid_summary.json`` from
+``policy-grid``; optionally takes a fine-resolution grid for the
+coarse-vs-fine sensitivity record.
+
+.. code-block:: bash
+
+   fresh-fuchs policy-rank \
+     --grid-summary outputs/tsa29mini/policy_grid/grid_summary.json \
+     --criterion expected_npv_cvar \
+     --alpha 0.95 \
+     --out-dir outputs/tsa29mini/policy_rank
+
+Options:
+
+- ``--grid-summary`` — grid run record from ``policy-grid`` (required).
+- ``--fine-grid-summary`` — optional finer grid for the sensitivity record.
+- ``--criterion`` — ``expected_npv_cvar`` (lexicographic E[NPV] then CVaR)
+  or ``mean_cvar`` (weighted score).
+- ``--weight`` — E[NPV] weight for ``mean_cvar`` (default 0.5).
+- ``--alpha`` — CVaR/VaR level (default 0.95).
+- ``--out-dir`` — directory for the ranking report.
+
+Orchestration (freshforge)
+--------------------------
+
+The whole pipeline is also wrapped as a freshforge workflow/matrix with
+evidence manifests (Phase 5, ``fresh_fuchs.orchestration``). See
+``examples/fuchs_workflow_template.yaml`` and ``examples/fuchs_matrix.yaml``;
+the provider runs on the public-safe synthetic instance so it is CI-safe.
+This requires the ``orchestration`` extra (``pip install -e
+".[orchestration]"``).

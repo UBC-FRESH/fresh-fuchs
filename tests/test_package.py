@@ -12,7 +12,11 @@ runner = CliRunner()
 
 
 def test_version() -> None:
-    assert __version__ == "0.1.0a0"
+    # Single source of truth: the installed package metadata (pyproject.toml).
+    from importlib import metadata as importlib_metadata
+
+    assert __version__ == importlib_metadata.version("fresh-fuchs")
+    assert __version__ == "0.1.0a1"
 
 
 def test_cli_importable() -> None:
