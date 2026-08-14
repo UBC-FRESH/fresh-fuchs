@@ -37,6 +37,9 @@ Phase 2 (economic valuation layer) complete on `feature/p2-economy`; PR to
   first-order effect of species price differentials + discounting.
 - 54 tests passing (25 new for P2), docs updated, validation-report Phase 2
   section recorded.
+- CI fix: ws3 1.0.5 (PyPI) requires `pulp` for the solver status path even
+  under HiGHS; added `pulp` to the core dependencies (pre-existing CI
+  failure on `main`, not introduced by P2).
 
 ## 0.1.0a1-pre — 2026-08-13
 

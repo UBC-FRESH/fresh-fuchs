@@ -27,6 +27,7 @@ dependencies = [
   "typer",
   "ws3",
   "highspy",
+  "pulp",
 ]
 
 [project.urls]

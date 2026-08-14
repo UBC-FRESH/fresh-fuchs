@@ -158,6 +158,10 @@ Phase 2 verification and calibration records. Companion to
   1.0.0 (pyomo/pyarrow/optuna not installed; not required by the costing
   surface). pyproject extra: `fhops = ["fhops>=1.0.0"]`.
 - Bundle and fragments as Phase 1.
+- CI dependency fix: ws3 1.0.5 from PyPI imports `pulp` unconditionally in
+  `ws3.opt.status()` even on the HiGHS path, so `pulp` was added to the core
+  dependencies (the local ws3 source checkout guards the import, which hid
+  the requirement locally).
 
 ## P2.1-P2.4 Economic surface records (calibration record)
 
