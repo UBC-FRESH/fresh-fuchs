@@ -293,3 +293,43 @@ seed control:
   order. Seed-fixed catalogues are bit-stable (asserted in tests); a
   scenario catalogue writer emits JSON with provenance.
 - Record count: 85 tests total.
+
+## P3.4 Fire in the ws3 model (verification record)
+
+`scenario/fire_lp.py`:
+
+- Fire enters the Model I even-flow/NPV LP as **path-dependent
+  coefficients**, not extra burn decisions: per-period survival
+  `product_{u<t}(1-p(u))` since last regeneration (harvest/salvage resets
+  the stand); green harvest volume = `Y(a_t) x survival_to(t)`; burn influx
+  = `p(t) x exposed live` (0 in harvest periods: harvest precedes fire);
+  salvageable = `severity_fraction x p(t) x exposed`.
+- `salvage` is a real Model I action (regeneration transition to age 0).
+  Operability is pruned per (zone, period) where burn probability = 0
+  (`apply_salvage_operability`) and floored at `min_salvage_age = 60`
+  (`add_salvage_action`), which also bounds Model I tree growth: a salvaged
+  cohort only reopens the salvage branch once back above rotation age.
+- Salvage feasibility row `salvage_vol(t) - salvageable_vol(t) <= 0` is an
+  explicit general row (`cgen` ub=0). Salvage is a free LP decision at the
+  P2.4 margins: default negative SPF margin (-11.95) -> the LP salvages
+  nothing (matching the fresh-salvage reference agent); a positive
+  (subsidised) margin exercises the mechanism. Salvage-priority forcing
+  rows are documented out of scope (degenerate: a forced salvage
+  regenerates the stand, so a priority floor collapses to "salvage
+  everything immediately").
+- The walk (`path_fire_steps`) reads per-ha `totvol` yields from
+  `ycomp[age]` scaled by the initial cohort area, so it is independent of
+  the model's transient applied-action state and works both at tree-build
+  time and post-solve.
+- Tests (`tests/test_fire_lp.py`, 8): survival compounds across null
+  periods and resets after harvest/salvage; salvage <= burned pool on all
+  paths; fire-free seed reproduces the volume-max baseline under a uniform
+  zero-discount surface; fire strictly reduces the NPV objective; salvage
+  feasibility + economics govern (negative margin -> 0 salvage, positive
+  margin -> salvage up to pool); missing zone mapping fails fast.
+- Real-bundle LP size (tsa29mini, 213 dtypes, every zone burning every
+  period): h=20 -> 377k vars / ~6 min build; h=30 extrapolates to ~1-4M
+  vars / tens of minutes build+solve. Dense-burn scenarios are the
+  computational worst case; stochastic catalogue scenarios (clustered
+  events) are cheaper. Baseline (no salvage) h=30 = 773k vars / ~4 min.
+- Record count: 91 tests total.
