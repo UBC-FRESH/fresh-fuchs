@@ -2,6 +2,42 @@
 
 Append-only project narrative, reverse-chronological.
 
+## 0.1.0a1-pre — 2026-08-14
+
+Phase 2 (economic valuation layer) complete on `feature/p2-economy`; PR to
+`main` pending.
+
+- P2.1 Typed economic surface: `economy/` Pydantic records (`Provenance`,
+  `PriceRecord` by product/price group, `HarvestCostRecord`,
+  `ReplantingCostRecord`, `SalvageRecord`, `DiscountRate`, `EconomicSurface`,
+  `NpvConfig`), every constant carrying provenance. `interior_surface()`
+  composes the default TSA29 surface anchored to the fresh-salvage economics
+  calibration (reference only): SPF sawlog $127/m3, harvest $45/m3
+  (incl. silviculture allocation), transport $30/$38, stumpage $15/m3 green /
+  0.25 x price burned, burned-price discount 0.65, +25% salvage cost premium,
+  decay 0.85/yr, discount 3%, downgrade-only grade transition. Coast price
+  matrix reserved as a template (not imported).
+- P2.2 Harvest cost via fhops: `HarvestCostModel` (single feller-buncher pass
+  $7.15/m3; 4-pass system $23.22/m3 for the default interior stand), optional
+  `fhops` extra with explicit diagnostic. fhops 1.0.0 installed editable.
+- P2.3 Replanting cost: flat per-ha by species (PL 2200 / SX 2400 / FD 2600 /
+  OT 2200, assumption-flagged); NOT charged in the LP by default
+  (`charge_replant_in_npv`) because $45/m3 carries the silviculture
+  allocation — avoids double-count.
+- P2.4 Salvage economics: cash-flow functions + anchor tests — SPF
+  sawlog-basis margin -11.95 (calibration approx -11.7), SPF transition-mix
+  -21.31 within the fresh-salvage -21..-24 $/m3 band (DF sawlog-basis -27.55
+  recorded with caveat).
+- P2.5 NPV objective in the inner LP: `economy/npv.py` (per-prescription
+  discounted cash flow; even-flow band stays on harvest volume), CLI
+  `economy-run`. Cross-validation: zero discount + no price differential
+  reproduces the volume-max schedule exactly; 3% + no differential within 1%.
+  Real bundle: NPV-max 33,625 m3/yr over 104,462 ha (96.6 m3/ha) vs
+  volume-max 35,451 m3/yr over 94,890 ha (112.1 m3/ha) — divergence is the
+  first-order effect of species price differentials + discounting.
+- 54 tests passing (25 new for P2), docs updated, validation-report Phase 2
+  section recorded.
+
 ## 0.1.0a1-pre — 2026-08-13
 
 Phase 1 (instance and model integration) complete; branch
