@@ -39,11 +39,11 @@ Changelog = "https://github.com/UBC-FRESH/fresh-fuchs/blob/main/CHANGE_LOG.md"
 
 [project.optional-dependencies]
 bundle = [
-  "femic @ git+https://github.com/UBC-FRESH/femic.git@v0.2.0a1",
+  "femic==0.2.0a1",
   "geopandas",
 ]
 orchestration = [
-  "freshforge @ git+https://github.com/UBC-FRESH/freshforge.git@5bce95b56146613c7c01950403fb717d3af886d7",
+  "freshforge==0.1.0a6",
 ]
 rv = ["pacal>=1.6.1"]
 fhops = ["fhops>=1.0.0"]
@@ -53,7 +53,7 @@ docs = [
 ]
 dev = [
   "build>=1.2",
-  "freshforge @ git+https://github.com/UBC-FRESH/freshforge.git@5bce95b56146613c7c01950403fb717d3af886d7",
+  "freshforge==0.1.0a6",
   "pytest>=8",
   "ruff>=0.5",
   "sphinx>=7",
