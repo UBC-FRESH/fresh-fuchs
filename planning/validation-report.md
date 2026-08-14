@@ -222,3 +222,39 @@ isolate the mechanism; the divergence is expected, not a defect.
 Open items: per-stand revenue by grade within the LP (flat sawlog-basis for
 v0.1.0a1); fhops system cost as the LP harvest-cost basis (currently $45
 calibration flat) — both flagged for later phases.
+
+# FUCHS Validation Report (Phase 3: Full-MC Scenario Engine)
+
+Phase 3 verification and calibration records. Companion to
+`v0.1.0a1-plan.md`.
+
+## Environment (P3, locked)
+
+- Same Python 3.12.3 venv as Phases 1-2; ws3/femic/fhops unchanged.
+- Bundle and fragments as Phase 1. fresh-salvage is reference only and NOT
+  installed in this environment; parity is asserted against reference values
+  carried in `src/fresh_fuchs/scenario/fire.py`.
+
+## P3.1 Fire dynamics (calibration record)
+
+Constants and dynamics reimplemented in `scenario/fire.py` with the
+fresh-salvage reference cited (no import):
+
+- MFRI by BEC zone: SBPS 100, IDF 200, MS 150, ESSF 200, ICH 250, SBS 125;
+  annual burn probability `1/MFRI`; burned-decay retention 0.85/yr.
+- Severity ladder (fresh-salvage `SEVERITY_TO_BURNED_FRAC`): Unburned 0.0,
+  Low 0.30, Moderate 0.60, High 0.85; tsa29mini has no burn-severity
+  polygons, so severity is a scenario parameter (default Moderate).
+- Annual ordering contract harvest -> fire -> salvage -> decay: burn influx
+  `R * V_rem[t]`, salvage ceiling `B[t-1] + BURN_IN[t]`, burned balance
+  `(B + BURN_IN - S) * 0.85`.
+- 10-year period burn probability `1 - (1 - R)^10` (SBPS ~0.0956, IDF
+  ~0.0489).
+
+Zone coverage (tsa29mini `au_table.csv`, 21 AUs): 12 IDF + 9 SBPS via the
+`{BEC}_{species}` stratum codes; unmapped zones fail fast
+(`UnknownBurnRateError`). The full MFRI ladder is carried so future bundles
+with more zones work unchanged.
+
+Parity: 14 unit tests assert the reference values and the dynamics ordering;
+the full suite is 68 tests.
