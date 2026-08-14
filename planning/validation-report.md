@@ -520,3 +520,40 @@ Real-bundle evidence (needs private data; not part of the test suite),
 
 Record count: 109 tests total; ruff, docs, build, twine green; the P4.2
 suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+
+## P4.3 Risk metrics (verification record)
+
+`src/fresh_fuchs/outer/risk.py`: pure functions over an NPV sample with
+explicit definitions (all in NPV space, "loss = low NPV"):
+
+- ``expected_npv`` (mean), ``npv_volatility`` (sample std, ddof=1).
+- ``value_at_risk(alpha)``: empirical alpha-quantile
+  (``np.quantile(..., method="inverted_cdf")``): with probability
+  ``1 - alpha`` the NPV falls at or below this level.
+- ``conditional_value_at_risk(alpha)``: mean of the worst
+  ``floor((1 - alpha) * n)`` observations (>= 1, so well-defined on small
+  samples).
+- ``shortfall_probability(threshold)``: fraction of observations strictly
+  below the threshold.
+- ``gaussian_tail_metrics``: analytic VaR/CVaR for a Normal fitted to the
+  sample moments (``z_alpha = Phi^{-1}(alpha)`` via A&S 26.2.23 + Newton
+  on ``math.erf`` — no scipy dependency; CVaR = mu - sigma phi(z)/(1-a)).
+  Recorded as a *comparison*, not the metric.
+- ``RiskReport`` per policy (metrics + Gaussian comparison + provenance),
+  plus ``risk_reports_from_grid`` (one report per successfully solved grid
+  point).
+
+`tests/test_risk.py` (9 tests):
+
+- Analytic checks on the constructed sample 1..100: VaR(0.95) = 95,
+  VaR(0.5) = 50, VaR(0.05) = 5; CVaR(0.95) = 3 (worst 5), CVaR(0.99) = 1;
+  shortfall below 10 = 9%; sample mean 2.5 / std on 1..4.
+- CVaR monotone non-increasing in alpha and <= E[NPV] on a seeded Normal
+  sample; CVaR <= VaR on grid results (worst-tail mean can never exceed
+  the tail boundary).
+- Gaussian comparison reproduces the hand-computed values
+  (z_0.95 = 1.64485...; mu - sigma phi(z)/(1-a)).
+- ``risk_reports_from_grid`` over a real 3-scenario grid run.
+
+Record count: 118 tests total; ruff, docs, build, twine green; the P4.3
+suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
