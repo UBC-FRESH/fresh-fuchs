@@ -68,6 +68,26 @@ public-safe synthetic instance (``fresh_fuchs.instance.synthetic``) in CI.
 Known limitations (v0.1.0a1)
 ----------------------------
 
+- **Dynamic inconsistency (open-loop inner LP)**: the inner LP — maximize
+  discounted NPV subject to an even-flow harvest-volume constraint — is an
+  open-loop formulation and is **dynamically inconsistent** (it fails
+  Bellman's principle of optimality): a future planner re-solving from the
+  realized state under the same goals would not follow the plan's tail. On
+  the public-safe synthetic instance the period-1 -> 2 transition is
+  followed but the periods-3+ tail diverges by ~9.5% of volume on replan;
+  notably the divergence is identical at 0% and 3% discount, so the driver
+  on this instance is the even-flow band's replanning asymmetry, not the
+  discount rate. The real tsa29mini bundle has more disequilibrium and
+  negatively-valued strata, so the synthetic figure is a lower bound.
+  **Consequence**: the open-loop NPV trajectories — and the outer-layer NPV
+  distributions and policy rankings built on them — are not credible as
+  intertemporal plans, and shadow-price / constraint-cost analysis from them
+  is biased. Recorded in
+  ``planning/dynamic-inconsistency-note.md`` (Daugherty 1991 reference) and
+  gated by ``tests/test_dynamic_inconsistency.py``. Remedies (consistent /
+  subgame-perfect formulations, credible precommitment via a regeneration
+  requirement, receding-horizon replanning) are follow-on research, not a
+  v0.1.0a1 patch.
 - **Full-foresight optimism**: the inner LP sees the whole scenario's fire
   schedule in advance, so NPV is an upper bound on the recourse value.
 - **Interior price-surface provenance**: flat Q4-2023 interior sawlog-basis
