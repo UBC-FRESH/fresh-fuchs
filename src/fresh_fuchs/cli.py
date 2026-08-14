@@ -442,6 +442,88 @@ def policy_grid_cmd(
         typer.echo(f"  wrote {path}")
 
 
+@app.command("policy-rank")
+def policy_rank_cmd(
+    grid_summary: Path = typer.Option(
+        ..., "--grid-summary", help="Grid run record (grid_summary.json from `policy-grid`)."
+    ),
+    fine_grid_summary: Path | None = typer.Option(
+        None,
+        "--fine-grid-summary",
+        help="Optional fine-resolution grid record for the coarse-vs-fine sensitivity check.",
+    ),
+    criterion: str = typer.Option(
+        "expected_npv_cvar", "--criterion", help="expected_npv_cvar | mean_cvar"
+    ),
+    weight: float | None = typer.Option(None, "--weight", min=0.0, max=1.0),
+    alpha: float = typer.Option(0.95, "--alpha", min=0.0, max=1.0),
+    out_dir: Path = typer.Option(
+        Path("outputs") / "tsa29mini" / "policy_rank",
+        "--out-dir",
+        help="Directory for the ranking report (CSV/JSON, optional PNG).",
+    ),
+) -> None:
+    """Rank grid policies and write the report (Phase 4, P4.4).
+
+    Recomputes the per-policy risk metrics from a ``policy-grid``
+    ``grid_summary.json`` (no re-solving), ranks under the given
+    criterion, and writes ranking.csv / ranking.json / report.json plus a
+    trade-off PNG when matplotlib is available.
+    """
+    from fresh_fuchs.economy.types import Provenance
+    from fresh_fuchs.outer import (
+        RankingCriterion,
+        build_report,
+        rank_from_grid_summary,
+        write_report,
+    )
+
+    provenance = Provenance(
+        source=f"policy-grid record {grid_summary}",
+        as_of="2026-08-14",
+        units="NPV (CAD)",
+        basis=f"policy ranking, criterion {criterion}, alpha {alpha}",
+    )
+    criterion_enum = RankingCriterion(criterion)
+    ranking = rank_from_grid_summary(
+        grid_summary,
+        criterion=criterion_enum,
+        alpha=alpha,
+        weight=weight,
+        provenance=provenance,
+    )
+    fine_ranking = None
+    if fine_grid_summary is not None:
+        fine_ranking = rank_from_grid_summary(
+            fine_grid_summary,
+            criterion=criterion_enum,
+            alpha=alpha,
+            weight=weight,
+            provenance=provenance,
+        )
+    report = build_report(
+        ranking, name=grid_summary.stem, fine_ranking=fine_ranking, provenance=provenance
+    )
+    written = write_report(report, out_dir)
+
+    typer.echo(f"policy-rank ({criterion}, alpha {alpha}):")
+    for ranked in ranking.rankings:
+        typer.echo(
+            f"  {ranked.rank:>2}. {ranked.policy.name:<36} "
+            f"E[NPV] {ranked.report.metrics.expected_npv:>12,.0f}  "
+            f"CVaR {ranked.report.metrics.conditional_value_at_risk:>12,.0f}"
+        )
+    if report.sensitivity is not None:
+        s = report.sensitivity
+        typer.echo(
+            f"sensitivity: coarse top '{s.coarse_top_policy}' -> fine top "
+            f"'{s.fine_top_policy}' (stable: {s.top_rank_stable}, "
+            f"E[NPV] delta {s.expected_npv_delta:,.0f}, CVaR delta {s.cvar_delta:,.0f})"
+        )
+    for path in written:
+        typer.echo(f"  wrote {path}")
+
+
 @app.command("inner-run")
 def inner_run() -> None:
     """Solve the inner Model I LP for a scenario (Phase 2-3)."""

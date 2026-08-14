@@ -557,3 +557,49 @@ explicit definitions (all in NPV space, "loss = low NPV"):
 
 Record count: 118 tests total; ruff, docs, build, twine green; the P4.3
 suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+
+## P4.4 Ranking and report (verification record)
+
+`src/fresh_fuchs/outer/ranking.py`: deterministic, reproducible ranking
+over ``RiskReport``\\ s.
+
+- ``RankingCriterion.E_NPV_CVAR``: lexicographic — maximize expected NPV,
+  then CVaR(alpha).
+- ``RankingCriterion.MEAN_CVAR``: maximize ``weight * E[NPV] +
+  (1 - weight) * CVaR(alpha)`` (weight default 0.5; 0 and 1 recover the
+  pure-CVaR and pure-E extremes).
+- Ties broken by NPV volatility; total order via a stable sort; ranks 1..n
+  and the recommended (rank-1) policy recorded in ``PolicyRanking``.
+
+`src/fresh_fuchs/outer/report.py`:
+
+- ``build_report``: ranking table + recommended policy, plus a
+  coarse-vs-fine ``SensitivityResult`` (top-rank stability, E[NPV]/CVaR
+  deltas of the top policy) when a fine-resolution ranking is supplied.
+- ``write_report``: `ranking.csv`, `ranking.json`, `report.json`; a
+  `tradeoff.png` (expected NPV vs CVaR, annotated) only when matplotlib is
+  importable — an optional diagnostic, never required.
+- ``rank_from_grid_summary``: re-derives the ranking from a ``policy-grid``
+  `grid_summary.json` without re-solving (full reproducibility).
+
+CLI `policy-rank` over a grid run record (thin wrapper). `tests/
+test_ranking.py` (7 tests): lexicographic ordering (E then CVaR), mean-CVaR
+weight extremes, run-to-run reproducibility (identical JSON payloads),
+sensitivity record (flipped top rank + deltas), report file emission, and
+the grid-summary round-trip through a real 3-policy grid run.
+
+Real-bundle evidence (needs private data; not part of the test suite),
+`outputs/tsa29mini/policy_rank_smoke` (grid `policy_grid_smoke2`, 3
+policies x 2 scenarios):
+
+| rank | policy | E[NPV] | CVaR(95%) |
+| --- | --- | --- | --- |
+| 1 | smoke2_unconstrained | 21,194,385 | 21,179,172 |
+| 2 | smoke2_PL_0.85 | 11,375,863 | 11,369,773 |
+| 3 | smoke2_PL_0.90 | 10,319,649 | 10,314,181 |
+
+Ranking reproduces the NPV/risk ordering observed in the P4.2 grid run;
+`ranking.csv`, `ranking.json`, `report.json`, and `tradeoff.png` written.
+
+Record count: 125 tests total; ruff, docs, build, twine green; the P4.4
+suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
