@@ -4,8 +4,8 @@ Append-only project narrative, reverse-chronological.
 
 ## 0.1.0a1-pre — 2026-08-14
 
-Phase 3 (full-MC scenario engine) complete on `feature/p3-scenario`; PR to
-`main` pending.
+Phase 3 (full-MC scenario engine) complete on `feature/p3-scenario`; PR
+[#23](https://github.com/UBC-FRESH/fresh-fuchs/pull/23) merged to `main`.
 
 - P3.1 Scenario records and catalogue: typed `DisturbanceScenario` /
   `FireEvent` records, `ScenarioGenerationParams` with
