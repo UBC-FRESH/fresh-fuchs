@@ -48,3 +48,28 @@ artifacts. See `planning/v0.1.0a1-plan.md` section 3 for the full list.
 Recourse planning, Interior log-grade revenue curves (BTC/FANSIER),
 transition-dependent replanting costs, PaCal acceleration, min/max-rotation
 outer variables, full-TSA/BC scale-up, DE/CH country comparison.
+
+## Side Quests (follow-on projects, not v0.1.0a1 phases)
+
+| Side quest | Tracker | Status |
+| --- | --- | --- |
+| Daugherty (1991) reproduction repo + paper (open, ws3-based, citable) | [#40](https://github.com/UBC-FRESH/fresh-fuchs/issues/40) | Proposed |
+
+**Daugherty (1991) reproduction** ([#40](https://github.com/UBC-FRESH/fresh-fuchs/issues/40)).
+Reproduce the Daugherty (1991) PhD thesis — *Credibility of Long Term Forest
+Planning: Dynamic Inconsistency in LP Based Forest Planning Models* — as
+closely as possible using `ws3`, in a **new UBC-FRESH repo**, and write a
+peer-reviewed paper presenting it. Motivation: the thesis proves that
+open-loop LP forest-planning models (like our inner LP) admit dynamically
+inconsistent, non-credible plans, but it was never published peer-reviewed
+and is effectively inaccessible (archival hard-copy only), so the field keeps
+rediscovering the trap. An open, transparent, reproducible ws3-based
+reproduction makes the result citable. Scope: reproduce the open-loop LP,
+the sequential-replanning simulator, the inconsistency measurement
+(decision + projected-output changes over time), and the consistent-solution
+(subgame-perfect) construct; reproduce the case-study experiments across
+initial forest conditions, harvest policies, and interest rates; upgrade ws3
+with a Model II LP formulation + solve if needed; cite the paper in the
+fresh-fuchs paper. fresh-fuchs provides the real test instance (tsa29mini)
+and a CI-safe characterization test (`tests/test_dynamic_inconsistency.py`)
+as a starting point; see `planning/dynamic-inconsistency-note.md`.
