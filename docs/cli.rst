@@ -10,6 +10,8 @@ The CLI is a thin wrapper over the Python APIs. Commands that have landed:
   heuristic baselines on a built model (Phase 1).
 - ``species-composition`` — report the managed-land-base species composition
   by static primary-species class (Phase 1, re-scoped P1.3).
+- ``economy-run`` — solve the NPV-max even-flow LP on a built model using the
+  interior economic surface (Phase 2).
 
 Remaining stubs land with their roadmap phases:
 
@@ -89,3 +91,35 @@ Options:
 - ``--bundle-dir`` — directory with the bundle CSV tables (required).
 - ``--fragments`` — fragments shapefile path (required).
 - ``--ageclass-width`` — age-class width for midpoint bucketing (default 10).
+
+``economy-run``
+---------------
+
+Solve the NPV-max even-flow LP on an already-built model directory. The
+objective maximizes discounted net revenue (sawlog-basis green net revenue
+per m3 by species price group; per-ha replant cost not charged by default
+because the $45/m3 harvest cost carries the silviculture allocation) subject
+to the same harvest-volume even-flow band as the volume-max baseline. Prints
+the LP status, harvest anchors, and the SPF/Df-Larch salvage-margin anchors
+(zero subsidy, sawlog basis). Requires ``femic``/``geopandas`` to derive the
+species mapping from the bundle.
+
+.. code-block:: bash
+
+   fresh-fuchs economy-run \
+     --bundle-dir <bundle>/data/model_input_bundle \
+     --fragments <bundle>/output/patchworks_tsa29mini/fragments/fragments.shp \
+     --model-path outputs/tsa29mini/ws3_woodstock_bootstrap_model \
+     --max-initial-age 436 \
+     --horizon 30 \
+     --out outputs/tsa29mini/npv_30.csv
+
+Options:
+
+- ``--bundle-dir`` — directory with the bundle CSV tables (required).
+- ``--fragments`` — fragments shapefile path (required).
+- ``--model-path`` — directory with the Woodstock-format sections.
+- ``--model-name`` — model name used as the section-file prefix.
+- ``--max-initial-age`` — oldest initial stand age in the bundle.
+- ``--horizon`` — number of periods.
+- ``--out`` — optional CSV of per-period results.
