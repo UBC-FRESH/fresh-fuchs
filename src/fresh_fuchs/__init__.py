@@ -7,4 +7,4 @@ inner LP (NPV-max harvest + replant scheduling) on the TSA29 mini instance.
 
 from __future__ import annotations
 
-__version__ = "0.1.0a0"
+__version__ = "0.1.0a1"

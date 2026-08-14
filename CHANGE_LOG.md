@@ -2,6 +2,47 @@
 
 Append-only project narrative, reverse-chronological.
 
+## 0.1.0a1 — 2026-08-14
+
+Phase 5 (orchestration, validation, calibration, release) complete on
+`feature/p5-release`; version bumped to `0.1.0a1`.
+
+- P5.1 Freshforge integration (`orchestration/`): `FuchsOrchestrationProvider`
+  (freshforge `Provider` protocol, id `fuchs.orchestration`) with thin node
+  types `build_model` / `scenario_run` / `policy_grid` / `policy_rank`
+  wrapping the Python APIs; `fuchs_workflow_spec` builds the
+  build_model -> scenario_run -> policy_grid -> policy_rank chain;
+  `run_fuchs_workflow` / `run_fuchs_matrix` execute with the FUCHS registry
+  and write `workflow_run_evidence_manifest` / `matrix_run_evidence_manifest`.
+  `instance/synthetic.py` moves the public-safe synthetic instance into the
+  package so the whole pipeline is reproducible from the provider without
+  private data. freshforge pinned to commit `5bce95b` (the durable-evidence
+  commit; the v0.1.0a5 tag predates `evidence.py`) as an `orchestration`
+  extra and in `dev`; `freshforge.providers` entry point registered.
+  Examples: `fuchs_workflow_template.yaml` + `fuchs_matrix.yaml` (PL
+  area-share sweep, CI-safe). 7 tests, `importorskip`-guarded.
+- P5.2 Validation (`planning/validation-report.md` Phase 5 section):
+  consolidated deterministic anchors (managed land base 35,083.0 ha; 30-period
+  even-flow mean harvest 35,451 m3/yr, +0.2% midpoint aging), fire-free vs
+  deterministic parity (NPV-max anchor bit-level: 33,624.77 m3/yr,
+  104,462.175 ha), cost-vs-volume baseline comparison, harvest-area
+  discrepancy status (understood + bounded +3.8%, documented caveat), and a
+  MC convergence study (`tests/test_mc_convergence.py`, synthetic n=5..320):
+  CVaR(0.95) stable to < 0.15% by n=40, E[NPV] to < 0.17%; production
+  catalogue guidance n ~ 80.
+- P5.3 Calibration record (`planning/economics-calibration.md`): every
+  economic constant with provenance; fresh-salvage cross-checks verified
+  against the live surface (sawlog-basis salvage margin -11.95, transition-mix
+  margin -21.31, green SPF 146/127/55, burned costs 56.25/38, discount 0.65,
+  decay 0.85); subsidy/FESBC anchors reference-only (unsubsidized regime).
+- P5.4 Documentation and release: README, Sphinx guides (quickstart, model
+  semantics, CLI reference, architecture, development, installation) updated
+  to v0.1.0a1; examples documented; CHANGE_LOG/RELEASE_NOTES/ROADMAP updated;
+  version bumped to `0.1.0a1` (tag `v0.1.0a1` created on `main` after the
+  PR merges).
+- Full gate: ruff, 141 tests, sphinx docs, build, twine all green on both
+  ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+
 ## 0.1.0a1-pre — 2026-08-14
 
 Phase 3 (full-MC scenario engine) complete on `feature/p3-scenario`; PR
@@ -52,8 +93,8 @@ Phase 3 (full-MC scenario engine) complete on `feature/p3-scenario`; PR
 
 ## 0.1.0a1-pre — 2026-08-14
 
-Phase 4 (outer policy layer) complete on `feature/p4-outer`; PR to `main`
-pending.
+Phase 4 (outer policy layer) complete on `feature/p4-outer`; PR
+[#30](https://github.com/UBC-FRESH/fresh-fuchs/pull/30) merged to `main`.
 
 - P4.1 Policy records and LP constraints (`outer/records.py`,
   `outer/policy.py`): `CompositionTarget`, `HarvestPolicyMode` (AAC /

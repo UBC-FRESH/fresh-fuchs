@@ -26,21 +26,42 @@ only).
 
 ## Status
 
-Phase 0 (skeleton scaffold). See `ROADMAP.md` for the phase/issue tracker
-map and `planning/v0.1.0a1-plan.md` for the detailed master plan.
+`v0.1.0a1` (Phase 5 release). The end-to-end pipeline is implemented,
+validated, and tested: extended ws3 model build -> full-MC fire scenarios ->
+per-scenario inner LP (NPV max) -> NPV distribution -> policy grid search ->
+CVaR-based ranking, wrapped in freshforge workflows/matrices with evidence.
+See `ROADMAP.md` for the phase/issue tracker map and
+`planning/v0.1.0a1-plan.md` for the detailed master plan.
 
 ## Quick Start
 
-(placeholder — fill in when the CLI lands in Phase 0/1)
+CI-safe synthetic end-to-end (no private data; the public-safe synthetic
+instance in `fresh_fuchs.instance.synthetic`):
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev,orchestration]"
+```
+
+```python
+from fresh_fuchs.orchestration import fuchs_workflow_spec, run_fuchs_workflow
+
+spec = fuchs_workflow_spec(horizon=2, n_scenarios=3, master_seed=42)
+result = run_fuchs_workflow(spec, workdir="outputs/synthetic")
+assert result.ok
+```
+
+Real-bundle pipeline (requires the `bundle` extra and the annex bundle):
+
+```bash
+pip install -e ".[dev,bundle]"
 fresh-fuchs --help
+# build-model -> scenario-run -> policy-grid -> policy-rank
 ```
 
 ## Documentation
 
-Sphinx docs under `docs/` (skeleton in Phase 0).
+Sphinx docs under `docs/`: installation, quickstart, model semantics, CLI
+reference, architecture, and development guides.
 
 ## License
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fresh-fuchs"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "Stochastic, risk-aware forest landscape planning on the TSA29 mini instance (WS3 inner LP + full-MC outer policy)"
 readme = "README.md"
 requires-python = ">=3.11"

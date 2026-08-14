@@ -34,8 +34,11 @@ The package reuses the UBC-FRESH ecosystem rather than re-implementing it:
   manifests.
 - ``fresh-salvage`` — economic calibration anchors (reference only).
 
-Status: Phase 0 (skeleton scaffold). The detailed master plan to the
-``v0.1.0a1`` release lives in ``planning/v0.1.0a1-plan.md`` in the
+Status: ``v0.1.0a1`` (Phase 5 release). The end-to-end pipeline — model
+build -> full-MC fire scenarios -> per-scenario inner LP -> NPV
+distribution -> policy grid search -> CVaR-based ranking — is implemented,
+validated, and tested, with freshforge orchestration and evidence. The
+detailed master plan lives in ``planning/v0.1.0a1-plan.md`` in the
 repository; ``ROADMAP.md`` is the condensed issue-tracker view.
 
 Documentation Map
