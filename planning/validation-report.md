@@ -277,3 +277,19 @@ seed control:
   `MissingDependencyError` when nemora is absent (it is not installed here;
   the empirical family samples its own array, whose Phase 4 source is
   nemora's bootstrap).
+
+## P3.3 Scenario records and generator (calibration record)
+
+`scenario/records.py`:
+
+- `FireEvent` (period, BEC zone, annual burn rate in [0,1], severity tier)
+  with per-family validation; `DisturbanceScenario` (name, seed,
+  probability, burn-rate multiplier, price factor, severity, events) with
+  `to_dict` in the ws3 `StochasticScenario` shape and a `from_dict`
+  round-trip.
+- `generate_scenarios(params)` draws each scenario's uncertainty vector
+  (P3.2) under `master_seed + i`, then expands deterministic zone rates
+  (SBPS 0.01, IDF 0.005) into per-period events in sorted-zone x period
+  order. Seed-fixed catalogues are bit-stable (asserted in tests); a
+  scenario catalogue writer emits JSON with provenance.
+- Record count: 85 tests total.

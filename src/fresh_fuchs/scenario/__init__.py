@@ -42,16 +42,27 @@ from .fire import (
     severity_burned_fraction,
     simulate_cohort_years,
 )
+from .records import (
+    DisturbanceScenario,
+    FireEvent,
+    ScenarioGenerationParams,
+    build_scenario,
+    generate_scenarios,
+    write_scenario_catalogue,
+)
 
 __all__ = [
     "ANNUAL_BURN_RATE_BY_ZONE",
     "DEFAULT_BURNED_DECAY_RATE",
     "DEFAULT_SEVERITY",
+    "DisturbanceScenario",
     "DistributionFamily",
+    "FireEvent",
     "MFRI_YEARS_BY_ZONE",
     "MissingDependencyError",
     "ParameterDistribution",
     "SEVERITY_TO_BURNED_FRAC",
+    "ScenarioGenerationParams",
     "UncertaintyDimension",
     "UncertaintyVector",
     "UnknownBurnRateError",
@@ -60,9 +71,11 @@ __all__ = [
     "annual_burn_rate",
     "annual_burn_rate_for_stratum",
     "bec_zone_from_stratum",
+    "build_scenario",
     "burn_influx",
     "burned_volume_after",
     "draw_vector",
+    "generate_scenarios",
     "live_volume_after",
     "load_burn_rate_by_au",
     "nemora_sample_distribution",
@@ -71,4 +84,5 @@ __all__ = [
     "sample_distribution",
     "severity_burned_fraction",
     "simulate_cohort_years",
+    "write_scenario_catalogue",
 ]
