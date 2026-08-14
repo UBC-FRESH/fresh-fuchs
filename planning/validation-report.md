@@ -424,3 +424,221 @@ Record count: 98 tests total; ruff, docs, build, twine green.
   editable ws3 1.1.0a4 tolerates it. Closed periods now use the empty age
   window `(0, -1)`, which both ws3 versions treat as closed. Full suite
   passes against both ws3 1.0.5 and 1.1.0a4.
+
+## P4.1 Outer policy records and constraints (verification record)
+
+`src/fresh_fuchs/outer/records.py` (CompositionTarget, HarvestPolicy,
+HarvestPolicyMode, PolicyRecord) and `src/fresh_fuchs/outer/policy.py`
+(coeff/cgen row builders, `apply_rotation_constraints`), wired into
+`add_even_flow_problem` (baseline) and `add_fire_problem` (fire-aware)
+plus `run_scenario_lp`/`run_scenario_pipeline` (policy threaded through
+the parallel payload as element 8). `tests/test_outer_policy.py` (6 tests):
+
+- `test_composition_target_binds_species_mix`: a 90%±5% PL composition
+  target (composition-only policy, no harvest policy) forces the harvested
+  area mix to PL — solver optimal, PL share 0.90 within [0.85, 0.95].
+- `test_aac_proxy_pins_harvest_volume`: AAC row pins every period's
+  harvest volume to the policy band upper edge (binding: each period hits
+  `aac * period_length * (1 + tolerance)` to 1e-6). AAC level derived from
+  the no-policy baseline mean annual harvest (~1,550 m3/yr); naive levels
+  (e.g. 30,000 or 40,000 m3/yr) are infeasible for the synthetic fixture
+  and were replaced by baseline-anchored levels.
+- `test_rotation_floor_binds_pl_harvest_age`: rotation floor 140 for PL
+  removes all PL harvest — the no-policy schedule harvests young PL
+  (ages < 140) while the constrained schedule never does (LP skips PL
+  entirely rather than cut it early). Floor semantics implemented as
+  operability windows `dt.operability["harvest"][period] = (floor,
+  ceiling)` so they work on both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+- `test_rotation_floor_ceiling_bounds_harvest_age`,
+  `test_records_validate`, `test_records_frozen` (record validation and
+  immutability).
+- `test_policy_flows_through_fire_pipeline`: composition targets fold
+  into the fire-aware LP via `run_scenario_lp` (burning scenario, salvage
+  path) — optimal with non-negative per-period harvest.
+
+Design records: composition rows are scenario-independent (share of
+harvested area per period, per-species cohorts via `path[0].data("area")`
+and `species_by_dtk`); AAC row uses raw (pre-fire) per-period harvest
+volume so it matches the reported `harvest_volume_m3` in both LPs.
+Rotation constraints are applied to the model before tree build. Outer
+policies are immutable records with provenance; `harvest_policy` is
+optional (composition-only policies allowed).
+
+Record count: 101 tests total; ruff, docs, build, twine green; the P4.1
+suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+
+## P4.2 Grid search driver (verification record)
+
+`src/fresh_fuchs/outer/grid.py`: `PolicyGrid` (composition axes +
+one harvest axis, `include_unconstrained`), Cartesian `expand` into
+`PolicyRecord` points, `run_grid` (full-MC per policy via
+`run_scenario_pipeline` with the P4.1 policy rows), and
+`write_grid_record` (per-policy pipeline records + grid summaries).
+Policies are distributed over a spawn process pool (`policy_workers`);
+each policy's scenario solves are independent and seed-fixed, so
+parallel results bit-match the sequential run. Failing or infeasible
+points are captured (`status="failed"`, `error`) instead of crashing the
+grid. `tests/test_grid.py` (8 tests):
+
+- `test_grid_expands_cartesian_product`: 2 composition axes x 1 x AAC
+  axis x 2 values (+ unconstrained) -> 5 policies, unique names, correct
+  target/AAC values.
+- `test_grid_expand_rotation_axis`: rotation floor axis -> floor dicts.
+- `test_grid_axis_validation`: out-of-range shares, zero AAC, rotation
+  without species all rejected.
+- `test_run_grid_evaluates_every_point`: 3 scenarios x 1 policy ->
+  optimal runs, 3 distinct NPV samples.
+- `test_run_grid_seed_fixed_bit_stable`: two runs, same grid -> identical
+  statuses and NPV samples.
+- `test_run_grid_parallel_bit_matches_sequential`: 4 policies,
+  `policy_workers=2` -> identical results vs sequential.
+- `test_run_grid_failed_policy_recorded_not_crashing`: infeasible AAC ->
+  `status="failed"`, `error` set, grid completes.
+- `test_write_grid_record_writes_summaries_and_per_policy`: per-policy
+  pipeline records + `grid_summary.csv` (per-scenario NPV columns) +
+  `grid_summary.json`.
+
+CLI `policy-grid` (thin wrapper over `run_grid`; grid spec via
+`--grid-json`). Example spec: `examples/policy-grid.tsa29mini.json`.
+
+Real-bundle evidence (needs private data; not part of the test suite),
+`outputs/tsa29mini/policy_grid_smoke*`:
+
+- Composition-only grid, h=6, 2 scenarios (master seed 42):
+  | policy | status | NPV mean | mean annual harvest |
+  | --- | --- | --- | --- |
+  | unconstrained | ok | 21,194,385 | 57,361 m3/yr |
+  | PL 85% +/- 5% | ok | 11,375,863 | 22,691 m3/yr |
+  | PL 90% +/- 5% | ok | 10,319,649 | 18,951 m3/yr |
+  Expected: stricter PL composition target trades NPV and harvest away
+  monotonically (LP is forced off the FD-rich optimum onto a PL-only
+  cut), the target binds in both scenarios, and results are seed-stable.
+- A PL 85% + AAC 50,000 m3/yr point is infeasible on this landscape
+  (composition x harvest constraint conflict); the grid records it as
+  `status="failed"` with the diagnostics and completes the sweep — the
+  fail-fast behaviour required for grid robustness.
+
+Record count: 109 tests total; ruff, docs, build, twine green; the P4.2
+suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+
+## P4.3 Risk metrics (verification record)
+
+`src/fresh_fuchs/outer/risk.py`: pure functions over an NPV sample with
+explicit definitions (all in NPV space, "loss = low NPV"):
+
+- ``expected_npv`` (mean), ``npv_volatility`` (sample std, ddof=1).
+- ``value_at_risk(alpha)``: empirical alpha-quantile
+  (``np.quantile(..., method="inverted_cdf")``): with probability
+  ``1 - alpha`` the NPV falls at or below this level.
+- ``conditional_value_at_risk(alpha)``: mean of the worst
+  ``floor((1 - alpha) * n)`` observations (>= 1, so well-defined on small
+  samples).
+- ``shortfall_probability(threshold)``: fraction of observations strictly
+  below the threshold.
+- ``gaussian_tail_metrics``: analytic VaR/CVaR for a Normal fitted to the
+  sample moments (``z_alpha = Phi^{-1}(alpha)`` via A&S 26.2.23 + Newton
+  on ``math.erf`` — no scipy dependency; CVaR = mu - sigma phi(z)/(1-a)).
+  Recorded as a *comparison*, not the metric.
+- ``RiskReport`` per policy (metrics + Gaussian comparison + provenance),
+  plus ``risk_reports_from_grid`` (one report per successfully solved grid
+  point).
+
+`tests/test_risk.py` (9 tests):
+
+- Analytic checks on the constructed sample 1..100: VaR(0.95) = 95,
+  VaR(0.5) = 50, VaR(0.05) = 5; CVaR(0.95) = 3 (worst 5), CVaR(0.99) = 1;
+  shortfall below 10 = 9%; sample mean 2.5 / std on 1..4.
+- CVaR monotone non-increasing in alpha and <= E[NPV] on a seeded Normal
+  sample; CVaR <= VaR on grid results (worst-tail mean can never exceed
+  the tail boundary).
+- Gaussian comparison reproduces the hand-computed values
+  (z_0.95 = 1.64485...; mu - sigma phi(z)/(1-a)).
+- ``risk_reports_from_grid`` over a real 3-scenario grid run.
+
+Record count: 118 tests total; ruff, docs, build, twine green; the P4.3
+suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+
+## P4.4 Ranking and report (verification record)
+
+`src/fresh_fuchs/outer/ranking.py`: deterministic, reproducible ranking
+over ``RiskReport``\\ s.
+
+- ``RankingCriterion.E_NPV_CVAR``: lexicographic — maximize expected NPV,
+  then CVaR(alpha).
+- ``RankingCriterion.MEAN_CVAR``: maximize ``weight * E[NPV] +
+  (1 - weight) * CVaR(alpha)`` (weight default 0.5; 0 and 1 recover the
+  pure-CVaR and pure-E extremes).
+- Ties broken by NPV volatility; total order via a stable sort; ranks 1..n
+  and the recommended (rank-1) policy recorded in ``PolicyRanking``.
+
+`src/fresh_fuchs/outer/report.py`:
+
+- ``build_report``: ranking table + recommended policy, plus a
+  coarse-vs-fine ``SensitivityResult`` (top-rank stability, E[NPV]/CVaR
+  deltas of the top policy) when a fine-resolution ranking is supplied.
+- ``write_report``: `ranking.csv`, `ranking.json`, `report.json`; a
+  `tradeoff.png` (expected NPV vs CVaR, annotated) only when matplotlib is
+  importable — an optional diagnostic, never required.
+- ``rank_from_grid_summary``: re-derives the ranking from a ``policy-grid``
+  `grid_summary.json` without re-solving (full reproducibility).
+
+CLI `policy-rank` over a grid run record (thin wrapper). `tests/
+test_ranking.py` (7 tests): lexicographic ordering (E then CVaR), mean-CVaR
+weight extremes, run-to-run reproducibility (identical JSON payloads),
+sensitivity record (flipped top rank + deltas), report file emission, and
+the grid-summary round-trip through a real 3-policy grid run.
+
+Real-bundle evidence (needs private data; not part of the test suite),
+`outputs/tsa29mini/policy_rank_smoke` (grid `policy_grid_smoke2`, 3
+policies x 2 scenarios):
+
+| rank | policy | E[NPV] | CVaR(95%) |
+| --- | --- | --- | --- |
+| 1 | smoke2_unconstrained | 21,194,385 | 21,179,172 |
+| 2 | smoke2_PL_0.85 | 11,375,863 | 11,369,773 |
+| 3 | smoke2_PL_0.90 | 10,319,649 | 10,314,181 |
+
+Ranking reproduces the NPV/risk ordering observed in the P4.2 grid run;
+`ranking.csv`, `ranking.json`, `report.json`, and `tradeoff.png` written.
+
+Record count: 125 tests total; ruff, docs, build, twine green; the P4.4
+suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+
+## P4.5 Phase 4 acceptance (verification record)
+
+End-to-end outer policy layer on the public-safe synthetic bundle,
+`tests/test_phase4_acceptance.py` (4 tests): the full sequence
+P4.1 -> P4.4 in one run — `PolicyGrid` (PL composition axis 0.85/0.9 +
+non-binding PL rotation floor 60 + unconstrained baseline, 3 points) ->
+`run_grid` (5 seed-fixed fire scenarios through the inner LP with policy
+rows) -> `risk_reports_from_grid` (alpha 0.95) -> `rank_policies`.
+
+- Reproducibility: two independent full evaluations produce bit-identical
+  per-policy NPV samples and an identical `PolicyRanking` JSON payload
+  (`run_at`/`environment` metadata excluded as expected). All 3 grid points
+  solve (`status == "ok"`).
+- CVaR-vs-expected trade-off: the E[NPV]-CVaR ranking is
+  unconstrained (best) -> PL 85% -> PL 90% (worst), and BOTH the expected
+  NPV and CVaR sequences are strictly monotone (tighter PL composition
+  lowers expected value and the worst tail together); CVaR(0.95) <= E[NPV]
+  for every policy; the recorded recommended policy is the rank-1
+  unconstrained baseline.
+- Pure-CVaR criterion (`MEAN_CVAR`, weight 0) reproduces a direct CVaR
+  sort exactly — the two criteria genuinely differ on this grid only in
+  the presence of E/CVaR inversions (checked in unit tests).
+- Artifacts: grid record (`grid_summary.csv/json`) and report
+  (`ranking.csv/json`, `report.json`) written end-to-end.
+
+Real-bundle evidence (private data, gitignored `outputs/`; recorded in the
+P4.2 and P4.4 entries above): `policy_grid_smoke2` (h=6, 2 scenarios, 3
+policies: unconstrained 21.19M / 57,361 m3/yr -> PL 85% 11.38M / 22,691 ->
+PL 90% 10.32M / 18,951; infeasible PL 85% + AAC 50,000 captured as
+failed) and `policy_rank_smoke` (E_NPV_CVAR ranking of that grid,
+recommended = unconstrained, plus `tradeoff.png`). Both the synthetic
+acceptance and the real-bundle runs place the recommended policy at rank 1
+and exhibit the CVaR-vs-expected ordering expected from the constraint
+ladder.
+
+Record count: 132 tests total; ruff, docs, build, twine green on both ws3
+1.0.5 (PyPI) and 1.1.0a4 (editable). `CHANGE_LOG.md` Phase 4 entry added;
+`ROADMAP.md` P4 marked complete; plan checklists updated.

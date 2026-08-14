@@ -52,6 +52,56 @@ Phase 3 (full-MC scenario engine) complete on `feature/p3-scenario`; PR
 
 ## 0.1.0a1-pre — 2026-08-14
 
+Phase 4 (outer policy layer) complete on `feature/p4-outer`; PR to `main`
+pending.
+
+- P4.1 Policy records and LP constraints (`outer/records.py`,
+  `outer/policy.py`): `CompositionTarget`, `HarvestPolicyMode` (AAC /
+  rotation constraints), `HarvestPolicy`, `PolicyRecord` (harvest policy
+  optional — composition-only policies allowed); composition rows
+  (target ± tolerance on area share by species) and AAC/rotation rows
+  (age-window-based, compatible with PyPI ws3 1.0.5) added to the
+  even-flow and fire LPs; policies folded through `run_scenario_lp` /
+  `run_scenario_pipeline` (parallel payload 8th element). Infeasible
+  policies surface clean diagnostics; rotation floor 140 skips PL
+  entirely (test: baseline harvests young PL, constrained never does).
+- P4.2 Grid search driver (`outer/grid.py`): `CompositionGridAxis`,
+  `HarvestGridAxis`, `PolicyGrid` (cross-product expansion plus an
+  optional unconstrained baseline), `run_grid` (nested spawn policy pool)
+  with failed-point capture (`status="failed"`, grid completes), typed
+  `GridRunRecord` + `write_grid_record` (`grid_summary.csv/json`), CLI
+  `policy-grid`, `examples/policy-grid.tsa29mini.json`. Real-bundle smoke
+  (h=6, 2 scenarios): unconstrained 21.19M NPV / 57,361 m3/yr -> PL 85%
+  11.38M / 22,691 -> PL 90% 10.32M / 18,951; PL 85% + AAC 50,000 recorded
+  as failed (infeasible).
+- P4.3 Risk metrics (`outer/risk.py`): `expected_npv`, `npv_volatility`,
+  `value_at_risk` (inverted-CDF quantile), `conditional_value_at_risk`
+  (mean of the worst tail), `shortfall_probability`, and a Gaussian
+  comparison (A&S 26.2.23 + Newton on `math.erf`, no scipy);
+  `RiskReport`/`RiskMetrics` records, `risk_report`,
+  `risk_reports_from_grid`.
+- P4.4 Ranking and report (`outer/ranking.py`, `outer/report.py`):
+  `RankingCriterion.E_NPV_CVAR` (lexicographic E[NPV] then CVaR) and
+  `MEAN_CVAR` (weighted score; 0/1 recover pure-CVaR / pure-E), volatility
+  tie-break, `PolicyRanking` with recommended (rank-1) policy; `build_report`
+  with coarse-vs-fine grid-resolution `SensitivityResult`; `write_report`
+  (`ranking.csv/json`, `report.json`, `tradeoff.png` only when matplotlib
+  is importable); `rank_from_grid_summary` re-derives rankings from a grid
+  record without re-solving; CLI `policy-rank`. Real-bundle ranking smoke:
+  unconstrained 21.19M -> PL 85% 11.38M -> PL 90% 10.32M.
+- P4.5 Acceptance (`tests/test_phase4_acceptance.py`, 4 tests):
+  synthetic end-to-end grid -> full-MC -> risk -> ranking is seed-fixed
+  reproducible (NPV samples and ranking bit-identical across runs);
+  tightening PL composition lowers both E[NPV] and CVaR monotonically
+  (CVaR <= E[NPV] for every policy) with the unconstrained baseline
+  recommended; pure-CVaR ranking matches a direct CVaR sort; grid records
+  and report artifacts written end-to-end.
+- Full gate: ruff, 132 tests, sphinx docs, build, twine all green on both
+  ws3 1.0.5 (PyPI) and 1.1.0a4 (editable). `ROADMAP.md` P4 complete;
+  validation-report Phase 4 entry appended.
+
+## 0.1.0a1-pre — 2026-08-14
+
 Phase 2 (economic valuation layer) complete on `feature/p2-economy`; PR to
 `main` pending.
 

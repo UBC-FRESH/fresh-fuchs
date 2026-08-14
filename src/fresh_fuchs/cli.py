@@ -315,6 +315,215 @@ def scenario_run_cmd(
         typer.echo(f"  wrote {path}")
 
 
+@app.command("policy-grid")
+def policy_grid_cmd(
+    bundle_dir: Path = typer.Option(..., "--bundle-dir", help="Bundle directory (bundle tables)."),
+    fragments_path: Path = typer.Option(..., "--fragments", help="Fragments shapefile path."),
+    model_path: Path = typer.Option(
+        Path("outputs") / "tsa29mini" / "ws3_woodstock_bootstrap_model",
+        "--model-path",
+        help="Directory with the Woodstock-format sections.",
+    ),
+    model_name: str = typer.Option("tsa29mini", "--model-name"),
+    grid_json: Path = typer.Option(
+        ..., "--grid-json", help="PolicyGrid definition (JSON). See examples/."
+    ),
+    max_initial_age: int = typer.Option(436, "--max-initial-age"),
+    horizon: int = typer.Option(30, "--horizon", min=1),
+    n_scenarios: int = typer.Option(10, "--n-scenarios", min=1),
+    master_seed: int = typer.Option(42, "--master-seed"),
+    scenario_workers: int = typer.Option(1, "--scenario-workers", min=1),
+    policy_workers: int = typer.Option(1, "--policy-workers", min=1),
+    out_dir: Path = typer.Option(
+        Path("outputs") / "tsa29mini" / "policy_grid",
+        "--out-dir",
+        help="Directory for grid records (per-policy runs + summaries).",
+    ),
+) -> None:
+    """Run the outer policy grid search (Phase 4, P4.2).
+
+    Expands the ``--grid-json`` PolicyGrid into its Cartesian product,
+    evaluates every policy over the seed-fixed MC scenario catalogue
+    (scenario -> inner-LP pipeline with the policy rows), and writes
+    per-policy run records plus grid summaries.
+    """
+    import json
+
+    from fresh_fuchs.economy.types import Provenance
+    from fresh_fuchs.outer import PolicyGrid, run_grid, write_grid_record
+    from fresh_fuchs.scenario.distributions import (
+        DistributionFamily,
+        ParameterDistribution,
+        UncertaintyDimension,
+        UncertaintyVector,
+    )
+    from fresh_fuchs.scenario.fire import MFRI_YEARS_BY_ZONE
+    from fresh_fuchs.scenario.records import ScenarioGenerationParams, generate_scenarios
+
+    config = InstanceConfig(model_name=model_name, model_path=model_path, horizon=horizon)
+    grid = PolicyGrid.model_validate(json.loads(grid_json.read_text()))
+
+    au_table = pd.read_csv(bundle_dir / "au_table.csv")
+    au_table["zone"] = au_table["stratum_code"].str.split("_").str[0].str.upper()
+    zone_by_au = {int(r.au_id): r.zone for r in au_table.itertuples()}
+    zones = sorted({z for z in zone_by_au.values() if z in MFRI_YEARS_BY_ZONE})
+    missing = sorted({z for z in zone_by_au.values() if z not in MFRI_YEARS_BY_ZONE})
+    if missing:
+        typer.echo(f"warning: zones without MFRI mapping ignored: {missing}")
+    zone_burn_rates = {zone: 1.0 / MFRI_YEARS_BY_ZONE[zone] for zone in zones}
+
+    species_by_au = load_species_by_au(bundle_dir)
+    fragments = load_fragments(fragments_path)
+    areas = apply_retention_split(fragments, species_by_au=species_by_au)
+    species_by_dtk = species_by_dtk_from_areas(areas)
+
+    provenance = Provenance(
+        source="tsa29mini bundle scenario catalogue (MFRI by zone)",
+        as_of="2026-08-14",
+        units="multiplier",
+        basis="Gaussian burn-rate multiplier (mean 1.0, std 0.2); fixed price 1.0",
+    )
+    vector = UncertaintyVector(
+        distributions={
+            UncertaintyDimension.FIRE_BURN_RATE: ParameterDistribution(
+                name="burn_rate_multiplier",
+                family=DistributionFamily.GAUSSIAN,
+                provenance=provenance,
+                mean=1.0,
+                std=0.2,
+            ),
+            UncertaintyDimension.PRICE: ParameterDistribution(
+                name="price_factor",
+                family=DistributionFamily.FIXED,
+                provenance=provenance,
+                value=1.0,
+            ),
+        }
+    )
+    params = ScenarioGenerationParams(
+        n_scenarios=n_scenarios,
+        master_seed=master_seed,
+        horizon=horizon,
+        period_length=config.period_length,
+        zone_burn_rates=zone_burn_rates,
+        vector=vector,
+        severity=DEFAULT_SEVERITY,
+        provenance=provenance,
+    )
+    scenarios = generate_scenarios(params)
+
+    record = run_grid(
+        grid=grid,
+        scenarios=scenarios,
+        config=config,
+        surface=interior_surface(),
+        species_by_dtk=species_by_dtk,
+        zone_by_au=zone_by_au,
+        max_initial_age=max_initial_age,
+        scenario_workers=scenario_workers,
+        policy_workers=policy_workers,
+    )
+    written = write_grid_record(record, out_dir)
+
+    typer.echo(
+        f"policy-grid complete ({record.n_policies} policies x "
+        f"{record.n_scenarios} scenarios, {record.policy_workers} policy workers, "
+        f"{record.scenario_workers} scenario workers):"
+    )
+    ok = [r for r in record.results if r.status == "ok"]
+    for result in ok:
+        samples = result.npv_samples
+        mean = sum(samples) / len(samples) if samples else float("nan")
+        typer.echo(f"  {result.policy.name:<36} NPV mean {mean:,.0f}  min {min(samples):,.0f}")
+    failed = [r for r in record.results if r.status != "ok"]
+    for result in failed:
+        typer.echo(f"  {result.policy.name}: FAILED ({result.error})")
+    for path in written:
+        typer.echo(f"  wrote {path}")
+
+
+@app.command("policy-rank")
+def policy_rank_cmd(
+    grid_summary: Path = typer.Option(
+        ..., "--grid-summary", help="Grid run record (grid_summary.json from `policy-grid`)."
+    ),
+    fine_grid_summary: Path | None = typer.Option(
+        None,
+        "--fine-grid-summary",
+        help="Optional fine-resolution grid record for the coarse-vs-fine sensitivity check.",
+    ),
+    criterion: str = typer.Option(
+        "expected_npv_cvar", "--criterion", help="expected_npv_cvar | mean_cvar"
+    ),
+    weight: float | None = typer.Option(None, "--weight", min=0.0, max=1.0),
+    alpha: float = typer.Option(0.95, "--alpha", min=0.0, max=1.0),
+    out_dir: Path = typer.Option(
+        Path("outputs") / "tsa29mini" / "policy_rank",
+        "--out-dir",
+        help="Directory for the ranking report (CSV/JSON, optional PNG).",
+    ),
+) -> None:
+    """Rank grid policies and write the report (Phase 4, P4.4).
+
+    Recomputes the per-policy risk metrics from a ``policy-grid``
+    ``grid_summary.json`` (no re-solving), ranks under the given
+    criterion, and writes ranking.csv / ranking.json / report.json plus a
+    trade-off PNG when matplotlib is available.
+    """
+    from fresh_fuchs.economy.types import Provenance
+    from fresh_fuchs.outer import (
+        RankingCriterion,
+        build_report,
+        rank_from_grid_summary,
+        write_report,
+    )
+
+    provenance = Provenance(
+        source=f"policy-grid record {grid_summary}",
+        as_of="2026-08-14",
+        units="NPV (CAD)",
+        basis=f"policy ranking, criterion {criterion}, alpha {alpha}",
+    )
+    criterion_enum = RankingCriterion(criterion)
+    ranking = rank_from_grid_summary(
+        grid_summary,
+        criterion=criterion_enum,
+        alpha=alpha,
+        weight=weight,
+        provenance=provenance,
+    )
+    fine_ranking = None
+    if fine_grid_summary is not None:
+        fine_ranking = rank_from_grid_summary(
+            fine_grid_summary,
+            criterion=criterion_enum,
+            alpha=alpha,
+            weight=weight,
+            provenance=provenance,
+        )
+    report = build_report(
+        ranking, name=grid_summary.stem, fine_ranking=fine_ranking, provenance=provenance
+    )
+    written = write_report(report, out_dir)
+
+    typer.echo(f"policy-rank ({criterion}, alpha {alpha}):")
+    for ranked in ranking.rankings:
+        typer.echo(
+            f"  {ranked.rank:>2}. {ranked.policy.name:<36} "
+            f"E[NPV] {ranked.report.metrics.expected_npv:>12,.0f}  "
+            f"CVaR {ranked.report.metrics.conditional_value_at_risk:>12,.0f}"
+        )
+    if report.sensitivity is not None:
+        s = report.sensitivity
+        typer.echo(
+            f"sensitivity: coarse top '{s.coarse_top_policy}' -> fine top "
+            f"'{s.fine_top_policy}' (stable: {s.top_rank_stable}, "
+            f"E[NPV] delta {s.expected_npv_delta:,.0f}, CVaR delta {s.cvar_delta:,.0f})"
+        )
+    for path in written:
+        typer.echo(f"  wrote {path}")
+
+
 @app.command("inner-run")
 def inner_run() -> None:
     """Solve the inner Model I LP for a scenario (Phase 2-3)."""
