@@ -42,6 +42,9 @@ bundle = [
   "femic @ git+https://github.com/UBC-FRESH/femic.git@v0.2.0a1",
   "geopandas",
 ]
+orchestration = [
+  "freshforge @ git+https://github.com/UBC-FRESH/freshforge.git@5bce95b56146613c7c01950403fb717d3af886d7",
+]
 rv = ["pacal>=1.6.1"]
 fhops = ["fhops>=1.0.0"]
 docs = [
@@ -50,6 +53,7 @@ docs = [
 ]
 dev = [
   "build>=1.2",
+  "freshforge @ git+https://github.com/UBC-FRESH/freshforge.git@5bce95b56146613c7c01950403fb717d3af886d7",
   "pytest>=8",
   "ruff>=0.5",
   "sphinx>=7",
@@ -65,6 +69,9 @@ test = ["pytest>=8"]
 
 [project.scripts]
 fresh-fuchs = "fresh_fuchs.cli:app"
+
+[project.entry-points."freshforge.providers"]
+fuchs_orchestration = "fresh_fuchs.orchestration:fuchs_provider_factory"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

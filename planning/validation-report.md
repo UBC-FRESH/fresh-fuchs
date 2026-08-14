@@ -642,3 +642,42 @@ ladder.
 Record count: 132 tests total; ruff, docs, build, twine green on both ws3
 1.0.5 (PyPI) and 1.1.0a4 (editable). `CHANGE_LOG.md` Phase 4 entry added;
 `ROADMAP.md` P4 marked complete; plan checklists updated.
+
+## P5.1 Freshforge integration (verification record)
+
+`src/fresh_fuchs/orchestration/` wraps the pipeline in freshforge
+workflows/matrices with evidence. `instance/synthetic.py` (new) moves the
+public-safe synthetic fixture into the package so the whole pipeline is
+reproducible from the provider without private data.
+
+- `orchestration/workflow.py`: `FuchsOrchestrationProvider`
+  (freshforge `Provider` protocol, id `fuchs.orchestration`) with four thin
+  node types wrapping the Python APIs — `build_model` (synthetic fixture;
+  real-bundle builds run via the `fresh-fuchs build-model` CLI),
+  `scenario_run`, `policy_grid`, `policy_rank`. `fuchs_workflow_spec()`
+  builds the build_model -> scenario_run -> policy_grid -> policy_rank
+  chain; `run_fuchs_workflow()` executes with the FUCHS registry and
+  writes a `workflow_run_evidence_manifest`.
+- `orchestration/matrix.py`: `load_fuchs_matrix` (validates, raises on
+  error diagnostics) and `run_fuchs_matrix` (executes every case with the
+  FUCHS registry, writes a `matrix_run_evidence_manifest`).
+- Provider registered for entry-point discovery under the
+  `freshforge.providers` group (`fuchs_orchestration`); freshforge pinned
+  to commit `5bce95b` (the durable-evidence-manifests commit; the v0.1.0a5
+  tag predates `evidence.py`) as an `orchestration` extra and in `dev`.
+- Examples: `examples/fuchs_workflow_template.yaml` (4-node pipeline with
+  a `${matrix.pl_share}` placeholder in the policy-grid node) and
+  `examples/fuchs_matrix.yaml` (PL area-share axis, 2 cases).
+
+Tests (`tests/test_orchestration.py`, 7): provider metadata/registry
+resolution, workflow topology, validate_node grid-missing diagnostic,
+end-to-end workflow run on the synthetic fixture with evidence manifest
+(artifacts land under the workdir), seed-fixed reproducibility (scenario
+NPV mean bit-identical across runs), matrix run (2 cases, each its own
+namespace, each ranking its own recommended policy) with matrix evidence
+manifest, and invalid-matrix rejection. `pytest.importorskip("freshforge")`
+guards the module so the core suite stays green without the extra.
+
+Record count: 139 tests total; ruff, docs, build, twine green. freshforge
+0.1.0a5 (commit `5bce95b`) installed editable locally; CI installs it from
+the pinned git URL.

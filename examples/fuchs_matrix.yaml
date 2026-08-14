@@ -1,0 +1,21 @@
+# FUCHS policy-grid matrix (Phase 5, P5.1).
+#
+# Expands `fuchs_workflow_template.yaml` over the PL area-share axis; each
+# case runs the full pipeline on the public-safe synthetic instance and
+# lands under `workdir/<matrix_id>/<case_id>/`.
+
+matrix:
+  id: fuchs_grid_matrix
+  name: FUCHS policy-grid matrix
+  description: Sweep the PL area-share composition target over the pipeline.
+  workflow_template: fuchs_workflow_template.yaml
+
+axes:
+  - id: plshare
+    values:
+      - id: pl085
+        variables:
+          pl_share: "0.85"
+      - id: pl090
+        variables:
+          pl_share: "0.90"
