@@ -155,3 +155,15 @@ Treat this as a research direction, not a v0.1.0a1 patch: (a) adopt option 1
 now (document + scope-limit); (b) build the sequential-replanning simulator
 and the consistent-solution formulation as the proposed Daugherty-
 reproduction study, using fresh-fuchs/ws3 as the open, reproducible stack.
+
+## Follow-on side quest
+
+This is tracked as a dedicated side quest — **reproduce Daugherty (1991) in
+ws3, openly and citably, and write the peer-reviewed paper** — in
+`ROADMAP.md` and issue
+[#40](https://github.com/UBC-FRESH/fresh-fuchs/issues/40). The thesis is
+effectively inaccessible (archival hard-copy only, ~$200 custom print), so
+the reproduction + paper is what makes the result citable in the fresh-fuchs
+paper and lets the field stop rediscovering the trap. fresh-fuchs provides
+the real test instance (tsa29mini) and the CI-safe characterization test
+(`tests/test_dynamic_inconsistency.py`) as a starting point.
