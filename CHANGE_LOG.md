@@ -16,9 +16,11 @@ Phase 3 (full-MC scenario engine) complete on `feature/p3-scenario`; PR to
   rate 1/MFRI, severity ladder {Unburned 0, Low 0.30, Moderate 0.60,
   High 0.85}, ordering harvest -> fire -> salvage -> decay, default
   Moderate. Zone/stratum lookup fails fast on unknown names.
-- P3.3 Scenario operability: `apply_salvage_operability` prunes fire-free
-  periods (null operability) so the Model I tree stays minimal; lookups by
-  zone name keyed from the AU table stratum prefix; 95 tests green.
+- P3.3 Scenario operability: `apply_salvage_operability` closes fire-free
+  periods with an empty salvage age window so the Model I tree stays
+  minimal; lookups by zone name keyed from the AU table stratum prefix;
+  98 tests green. (Closed periods use `(0, -1)` rather than a `None`
+  sentinel for PyPI ws3 1.0.5 compatibility.)
 - P3.4 Fire encoding in the inner LP (`scenario/fire_lp.py`): fire as
   path-dependent coefficients — survival `Pi(1-p)` since regeneration,
   green volume `Y(age)*survival`, burn influx `p*exposed`, salvageable

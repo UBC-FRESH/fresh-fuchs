@@ -276,11 +276,16 @@ def apply_salvage_operability(
 ) -> ws3.forest.ForestModel:
     """Restrict salvage operability to periods the scenario actually burns.
 
-    Compiles the salvage action per development type, then nulls out periods
+    Compiles the salvage action per development type, then closes out periods
     with zero burn probability for that type's zone so the tree does not
     branch into (zero-volume) salvage decisions in fire-free periods. The
     age window (``min_salvage_age`` .. ``max_age``) comes from the
     ``oper_expr`` set by :func:`add_salvage_action`.
+
+    Closed periods are recorded as an empty age window ``(0, -1)`` rather
+    than ``None``: PyPI ws3 1.0.5's ``is_operable``/``operable_ages`` cannot
+    unpack ``None`` entries (ws3 1.1.x tolerates them), while both versions
+    handle a window with ``lo > hi`` as closed.
     """
     lookup = build_burn_prob_lookup(scenario, model.period_length)
     for dtk, dt in model.dtypes.items():
@@ -291,7 +296,7 @@ def apply_salvage_operability(
         dt.compile_action("salvage")
         for period in model.periods:
             if lookup.get((zone, period), 0.0) == 0.0:
-                dt.operability["salvage"][period] = None
+                dt.operability["salvage"][period] = (0, -1)
     return model
 
 

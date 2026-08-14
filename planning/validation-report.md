@@ -416,3 +416,11 @@ suite):
   tracked separately.
 
 Record count: 98 tests total; ruff, docs, build, twine green.
+
+- CI compatibility fix (ws3 1.0.5, PyPI — the version CI installs):
+  `apply_salvage_operability` originally recorded closed fire-free periods
+  as `operability["salvage"][period] = None`, which PyPI ws3 1.0.5's
+  `is_operable`/`operable_ages` cannot unpack (TypeError); the local
+  editable ws3 1.1.0a4 tolerates it. Closed periods now use the empty age
+  window `(0, -1)`, which both ws3 versions treat as closed. Full suite
+  passes against both ws3 1.0.5 and 1.1.0a4.
