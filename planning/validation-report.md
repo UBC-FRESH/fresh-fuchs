@@ -603,3 +603,42 @@ Ranking reproduces the NPV/risk ordering observed in the P4.2 grid run;
 
 Record count: 125 tests total; ruff, docs, build, twine green; the P4.4
 suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+
+## P4.5 Phase 4 acceptance (verification record)
+
+End-to-end outer policy layer on the public-safe synthetic bundle,
+`tests/test_phase4_acceptance.py` (4 tests): the full sequence
+P4.1 -> P4.4 in one run — `PolicyGrid` (PL composition axis 0.85/0.9 +
+non-binding PL rotation floor 60 + unconstrained baseline, 3 points) ->
+`run_grid` (5 seed-fixed fire scenarios through the inner LP with policy
+rows) -> `risk_reports_from_grid` (alpha 0.95) -> `rank_policies`.
+
+- Reproducibility: two independent full evaluations produce bit-identical
+  per-policy NPV samples and an identical `PolicyRanking` JSON payload
+  (`run_at`/`environment` metadata excluded as expected). All 3 grid points
+  solve (`status == "ok"`).
+- CVaR-vs-expected trade-off: the E[NPV]-CVaR ranking is
+  unconstrained (best) -> PL 85% -> PL 90% (worst), and BOTH the expected
+  NPV and CVaR sequences are strictly monotone (tighter PL composition
+  lowers expected value and the worst tail together); CVaR(0.95) <= E[NPV]
+  for every policy; the recorded recommended policy is the rank-1
+  unconstrained baseline.
+- Pure-CVaR criterion (`MEAN_CVAR`, weight 0) reproduces a direct CVaR
+  sort exactly — the two criteria genuinely differ on this grid only in
+  the presence of E/CVaR inversions (checked in unit tests).
+- Artifacts: grid record (`grid_summary.csv/json`) and report
+  (`ranking.csv/json`, `report.json`) written end-to-end.
+
+Real-bundle evidence (private data, gitignored `outputs/`; recorded in the
+P4.2 and P4.4 entries above): `policy_grid_smoke2` (h=6, 2 scenarios, 3
+policies: unconstrained 21.19M / 57,361 m3/yr -> PL 85% 11.38M / 22,691 ->
+PL 90% 10.32M / 18,951; infeasible PL 85% + AAC 50,000 captured as
+failed) and `policy_rank_smoke` (E_NPV_CVAR ranking of that grid,
+recommended = unconstrained, plus `tradeoff.png`). Both the synthetic
+acceptance and the real-bundle runs place the recommended policy at rank 1
+and exhibit the CVaR-vs-expected ordering expected from the constraint
+ladder.
+
+Record count: 132 tests total; ruff, docs, build, twine green on both ws3
+1.0.5 (PyPI) and 1.1.0a4 (editable). `CHANGE_LOG.md` Phase 4 entry added;
+`ROADMAP.md` P4 marked complete; plan checklists updated.
