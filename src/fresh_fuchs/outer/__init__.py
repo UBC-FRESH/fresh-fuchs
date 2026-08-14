@@ -8,6 +8,15 @@ policies and produces the recommendation.
 
 from __future__ import annotations
 
+from .grid import (
+    CompositionGridAxis,
+    GridRunRecord,
+    HarvestGridAxis,
+    PolicyGrid,
+    PolicyGridResult,
+    run_grid,
+    write_grid_record,
+)
 from .policy import (
     apply_rotation_constraints,
     policy_cgen_data,
@@ -21,11 +30,18 @@ from .records import (
 )
 
 __all__ = [
+    "CompositionGridAxis",
     "CompositionTarget",
+    "GridRunRecord",
+    "HarvestGridAxis",
     "HarvestPolicy",
     "HarvestPolicyMode",
+    "PolicyGrid",
+    "PolicyGridResult",
     "PolicyRecord",
     "apply_rotation_constraints",
     "policy_cgen_data",
     "policy_coeff_funcs",
+    "run_grid",
+    "write_grid_record",
 ]

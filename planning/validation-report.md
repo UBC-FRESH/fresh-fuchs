@@ -466,3 +466,57 @@ optional (composition-only policies allowed).
 
 Record count: 101 tests total; ruff, docs, build, twine green; the P4.1
 suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).
+
+## P4.2 Grid search driver (verification record)
+
+`src/fresh_fuchs/outer/grid.py`: `PolicyGrid` (composition axes +
+one harvest axis, `include_unconstrained`), Cartesian `expand` into
+`PolicyRecord` points, `run_grid` (full-MC per policy via
+`run_scenario_pipeline` with the P4.1 policy rows), and
+`write_grid_record` (per-policy pipeline records + grid summaries).
+Policies are distributed over a spawn process pool (`policy_workers`);
+each policy's scenario solves are independent and seed-fixed, so
+parallel results bit-match the sequential run. Failing or infeasible
+points are captured (`status="failed"`, `error`) instead of crashing the
+grid. `tests/test_grid.py` (8 tests):
+
+- `test_grid_expands_cartesian_product`: 2 composition axes x 1 x AAC
+  axis x 2 values (+ unconstrained) -> 5 policies, unique names, correct
+  target/AAC values.
+- `test_grid_expand_rotation_axis`: rotation floor axis -> floor dicts.
+- `test_grid_axis_validation`: out-of-range shares, zero AAC, rotation
+  without species all rejected.
+- `test_run_grid_evaluates_every_point`: 3 scenarios x 1 policy ->
+  optimal runs, 3 distinct NPV samples.
+- `test_run_grid_seed_fixed_bit_stable`: two runs, same grid -> identical
+  statuses and NPV samples.
+- `test_run_grid_parallel_bit_matches_sequential`: 4 policies,
+  `policy_workers=2` -> identical results vs sequential.
+- `test_run_grid_failed_policy_recorded_not_crashing`: infeasible AAC ->
+  `status="failed"`, `error` set, grid completes.
+- `test_write_grid_record_writes_summaries_and_per_policy`: per-policy
+  pipeline records + `grid_summary.csv` (per-scenario NPV columns) +
+  `grid_summary.json`.
+
+CLI `policy-grid` (thin wrapper over `run_grid`; grid spec via
+`--grid-json`). Example spec: `examples/policy-grid.tsa29mini.json`.
+
+Real-bundle evidence (needs private data; not part of the test suite),
+`outputs/tsa29mini/policy_grid_smoke*`:
+
+- Composition-only grid, h=6, 2 scenarios (master seed 42):
+  | policy | status | NPV mean | mean annual harvest |
+  | --- | --- | --- | --- |
+  | unconstrained | ok | 21,194,385 | 57,361 m3/yr |
+  | PL 85% +/- 5% | ok | 11,375,863 | 22,691 m3/yr |
+  | PL 90% +/- 5% | ok | 10,319,649 | 18,951 m3/yr |
+  Expected: stricter PL composition target trades NPV and harvest away
+  monotonically (LP is forced off the FD-rich optimum onto a PL-only
+  cut), the target binds in both scenarios, and results are seed-stable.
+- A PL 85% + AAC 50,000 m3/yr point is infeasible on this landscape
+  (composition x harvest constraint conflict); the grid records it as
+  `status="failed"` with the diagnostics and completes the sweep — the
+  fail-fast behaviour required for grid robustness.
+
+Record count: 109 tests total; ruff, docs, build, twine green; the P4.2
+suite passes against both ws3 1.0.5 (PyPI) and 1.1.0a4 (editable).

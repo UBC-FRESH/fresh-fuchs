@@ -32,7 +32,6 @@ from fresh_fuchs.instance import (
     summarize,
 )
 from fresh_fuchs.instance.species import SpeciesClass
-from fresh_fuchs.outer.records import HarvestPolicyMode
 from fresh_fuchs.scenario.fire_lp import (
     FireLpConfig,
     add_fire_problem,
@@ -142,6 +141,8 @@ def run_scenario_lp(
     model = add_salvage_action(model, max_age=config.max_age, min_salvage_age=min_salvage_age)
     model = apply_salvage_operability(model, scenario=scenario, zone_by_au=zone_by_au)
     if policy is not None and policy.harvest_policy is not None:
+        from fresh_fuchs.outer.records import HarvestPolicyMode
+
         if policy.harvest_policy.mode is HarvestPolicyMode.ROTATION_CONSTRAINTS:
             from fresh_fuchs.outer.policy import apply_rotation_constraints
 
