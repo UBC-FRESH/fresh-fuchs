@@ -16,7 +16,7 @@ def test_version() -> None:
     from importlib import metadata as importlib_metadata
 
     assert __version__ == importlib_metadata.version("fresh-fuchs")
-    assert __version__ == "0.1.0a1"
+    assert __version__ == "0.1.0a2"
 
 
 def test_cli_importable() -> None:
