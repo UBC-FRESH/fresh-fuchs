@@ -288,3 +288,125 @@ def test_write_grid_record_writes_summaries_and_per_policy(tmp_path):
     summary = (out / "grid_summary.csv").read_text().splitlines()
     assert len(summary) == record.n_policies + 1
     assert "npv_0" in summary[0]
+
+
+def test_grid_expand_composition_points() -> None:
+    grid = PolicyGrid(
+        name="pts",
+        composition_points=(
+            {"PL": 0.70, "FD": 0.20},
+            {"PL": 0.60, "FD": 0.30},
+        ),
+        composition_tolerance=0.05,
+        harvest_axis=HarvestGridAxis(
+            mode=HarvestPolicyMode.AAC_PROXY,
+            values=(1_000.0,),
+            tolerance=0.05,
+            provenance=P,
+        ),
+        provenance=P,
+    )
+    points = grid.expand()
+    assert len(points) == 2
+    assert points[0].name == "pts_PL_0.70_FD_0.20_aac_1000"
+    assert points[1].name == "pts_PL_0.60_FD_0.30_aac_1000"
+    for p in points:
+        assert len(p.composition_targets) == 2
+        assert p.harvest_policy is not None
+    pl_shares = {p.composition_targets[0].target_share for p in points}
+    assert pl_shares == {0.70, 0.60}
+    for p in points:
+        for t in p.composition_targets:
+            assert t.tolerance == 0.05
+
+
+def test_grid_expand_composition_points_with_unconstrained() -> None:
+    grid = PolicyGrid(
+        name="pts",
+        composition_points=(
+            {"PL": 0.80, "FD": 0.10},
+        ),
+        include_unconstrained=True,
+        provenance=P,
+    )
+    points = grid.expand()
+    assert len(points) == 2
+    assert points[0].name == "pts_unconstrained"
+    assert points[0].composition_targets == ()
+    assert points[1].name == "pts_PL_0.80_FD_0.10"
+    assert len(points[1].composition_targets) == 2
+
+
+def test_grid_expand_composition_points_per_point_tolerance() -> None:
+    grid = PolicyGrid(
+        name="pts",
+        composition_points=(
+            {"PL": 0.70, "FD": 0.20},
+            {"PL": 0.60, "FD": 0.30, "tolerance": 0.03},
+        ),
+        composition_tolerance=0.05,
+        provenance=P,
+    )
+    points = grid.expand()
+    assert len(points) == 2
+    for t in points[0].composition_targets:
+        assert t.tolerance == 0.05
+    for t in points[1].composition_targets:
+        assert t.tolerance == 0.03
+
+
+def test_grid_expand_composition_points_overrides_axes() -> None:
+    grid = PolicyGrid(
+        name="mixed",
+        composition_axes=(
+            CompositionGridAxis(
+                species=SpeciesClass.LODGEPOLE_PINE,
+                values=(0.9,),
+                tolerance=0.05,
+                provenance=P,
+            ),
+        ),
+        composition_points=(
+            {"PL": 0.70, "FD": 0.20},
+        ),
+        provenance=P,
+    )
+    points = grid.expand()
+    assert len(points) == 1
+    assert points[0].name == "pts_PL_0.70_FD_0.20" or "PL_0.70" in points[0].name
+    assert len(points[0].composition_targets) == 2
+
+
+def test_grid_expand_composition_points_no_harvest_axis() -> None:
+    grid = PolicyGrid(
+        name="comp_only",
+        composition_points=(
+            {"PL": 0.70, "FD": 0.20},
+            {"PL": 0.50, "FD": 0.40},
+        ),
+        provenance=P,
+    )
+    points = grid.expand()
+    assert len(points) == 2
+    for p in points:
+        assert p.harvest_policy is None
+        assert len(p.composition_targets) == 2
+
+
+def test_grid_expand_axes_still_works() -> None:
+    grid = PolicyGrid(
+        name="axes",
+        composition_axes=(
+            CompositionGridAxis(
+                species=SpeciesClass.LODGEPOLE_PINE,
+                values=(0.8, 0.9),
+                tolerance=0.05,
+                provenance=P,
+            ),
+        ),
+        provenance=P,
+    )
+    points = grid.expand()
+    assert len(points) == 2
+    shares = {p.composition_targets[0].target_share for p in points}
+    assert shares == {0.8, 0.9}

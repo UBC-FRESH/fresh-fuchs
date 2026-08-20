@@ -98,6 +98,19 @@ class HarvestGridAxis(BaseModel):
 class PolicyGrid(BaseModel):
     """Cartesian grid over composition axes and one harvest axis.
 
+    Two modes for specifying composition targets:
+
+    - **Axis mode** (``composition_axes``): per-species axes with candidate
+      share values; ``expand`` takes the Cartesian product.
+    - **Points mode** (``composition_points``): an explicit list of
+      species→share mappings; no Cartesian product, each point is taken
+      as-is.  Use this when only certain combinations are feasible or
+      meaningful.
+
+    ``composition_points`` takes precedence when both are provided.
+    ``composition_tolerance`` is the default tolerance for points mode
+    (overridable per-point with a ``tolerance`` key).
+
     With ``include_unconstrained`` the fully unconstrained policy (no
     composition targets, no harvest policy) is prepended as a baseline
     reference point.
@@ -107,6 +120,21 @@ class PolicyGrid(BaseModel):
 
     name: str
     composition_axes: tuple[CompositionGridAxis, ...] = Field(default_factory=tuple)
+    composition_points: tuple[dict[str, float], ...] = Field(
+        default_factory=tuple,
+        description=(
+            "Explicit species→share mappings. Each dict maps species codes "
+            "(e.g. 'PL', 'FD') to target area shares. Overrides "
+            "composition_axes when non-empty."
+        ),
+    )
+    composition_tolerance: Annotated[float, Field(ge=0.0, lt=1.0)] = Field(
+        default=0.05,
+        description=(
+            "Default tolerance for composition_points (can be overridden "
+            "per-point with a 'tolerance' key)."
+        ),
+    )
     harvest_axis: HarvestGridAxis | None = None
     include_unconstrained: bool = False
     provenance: Provenance
@@ -114,15 +142,10 @@ class PolicyGrid(BaseModel):
     def expand(self) -> tuple[PolicyRecord, ...]:
         """Expand the grid into its Cartesian product of policies.
 
-        Deterministic order: composition axes in declaration order (the
-        first axis varies slowest), then the harvest axis; the
-        unconstrained point (if requested) comes first.
+        Deterministic order: composition points/axes in declaration order,
+        then the harvest axis; the unconstrained point (if requested) comes
+        first.
         """
-        comp_cells = [()]
-        if self.composition_axes:
-            comp_cells = [
-                cell for cell in itertools.product(*[axis.values for axis in self.composition_axes])
-            ]
         harvest_cells = [None]
         if self.harvest_axis is not None:
             harvest_cells = list(self.harvest_axis.values)
@@ -137,29 +160,75 @@ class PolicyGrid(BaseModel):
                     provenance=self.provenance,
                 )
             )
-        for cell in comp_cells:
-            targets = tuple(
-                CompositionTarget(
-                    species=axis.species,
-                    target_share=value,
-                    tolerance=axis.tolerance,
-                    provenance=axis.provenance,
-                )
-                for axis, value in zip(self.composition_axes, cell)
-            )
+
+        if self.composition_points:
+            comp_cells = self._expand_composition_points()
+        elif self.composition_axes:
+            comp_cells = [
+                self._expand_axes_cell(cell)
+                for cell in itertools.product(*[axis.values for axis in self.composition_axes])
+            ]
+        else:
+            comp_cells = [((), "")]
+
+        for targets, label in comp_cells:
             for level in harvest_cells:
                 harvest_policy = None
                 if self.harvest_axis is not None:
                     harvest_policy = _harvest_policy_for(self.harvest_axis, level)
                 points.append(
                     PolicyRecord(
-                        name=_point_name(self, cell, self.harvest_axis, level),
+                        name=_point_name_from_label(self.name, label, self.harvest_axis, level),
                         composition_targets=targets,
                         harvest_policy=harvest_policy,
                         provenance=self.provenance,
                     )
                 )
         return tuple(points)
+
+    def _expand_composition_points(
+        self,
+    ) -> list[tuple[tuple[CompositionTarget, ...], str]]:
+        """Convert composition_points into (targets, label) pairs."""
+        result: list[tuple[tuple[CompositionTarget, ...], str]] = []
+        for point in self.composition_points:
+            tolerance = point.get("tolerance", self.composition_tolerance)
+            targets: list[CompositionTarget] = []
+            parts: list[str] = []
+            for species_str, share in point.items():
+                if species_str == "tolerance":
+                    continue
+                species = SpeciesClass(species_str)
+                targets.append(
+                    CompositionTarget(
+                        species=species,
+                        target_share=share,
+                        tolerance=tolerance,
+                        provenance=self.provenance,
+                    )
+                )
+                parts.append(f"{species.value}_{share:.2f}")
+            result.append((tuple(targets), "_".join(parts)))
+        return result
+
+    def _expand_axes_cell(
+        self, cell: tuple[float, ...]
+    ) -> tuple[tuple[CompositionTarget, ...], str]:
+        """Convert a Cartesian-product cell from composition_axes into (targets, label)."""
+        targets = tuple(
+            CompositionTarget(
+                species=axis.species,
+                target_share=value,
+                tolerance=axis.tolerance,
+                provenance=axis.provenance,
+            )
+            for axis, value in zip(self.composition_axes, cell)
+        )
+        label = "_".join(
+            f"{axis.species.value}_{value:.2f}"
+            for axis, value in zip(self.composition_axes, cell)
+        )
+        return targets, label
 
 
 def _harvest_policy_for(axis: HarvestGridAxis, level: float) -> HarvestPolicy:
@@ -185,15 +254,16 @@ def _harvest_policy_for(axis: HarvestGridAxis, level: float) -> HarvestPolicy:
     )
 
 
-def _point_name(
-    grid: PolicyGrid,
-    cell: tuple[float, ...],
+def _point_name_from_label(
+    grid_name: str,
+    comp_label: str,
     harvest_axis: HarvestGridAxis | None,
     level: float | None,
 ) -> str:
-    parts = [grid.name]
-    for axis, value in zip(grid.composition_axes, cell):
-        parts.append(f"{axis.species.value}_{value:.2f}")
+    """Compose a policy name from the grid name, composition label, and harvest level."""
+    parts = [grid_name]
+    if comp_label:
+        parts.append(comp_label)
     if harvest_axis is not None and level is not None:
         if harvest_axis.mode is HarvestPolicyMode.AAC_PROXY:
             parts.append(f"aac_{level:.0f}")
