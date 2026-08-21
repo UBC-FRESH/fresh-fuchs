@@ -2,6 +2,36 @@
 
 Append-only project narrative, reverse-chronological.
 
+## Unreleased — species-switching replant (feature/species-switching-replant)
+
+Species-switching replant transitions: harvest any species and replant
+with a different species, driven by policy-level composition targets.
+
+Phase 1 — Multi-species yield curve framework:
+- `instance/yields_multi.py`: `YieldCurve` dataclass, `MultiSpeciesYieldTable`,
+  `generate_synthetic_curve()` (Chapman-Richards with species-specific params
+  and SI-level scaling), `build_multi_species_yields()` (tries bundle
+  species-proportion curves first, falls back to synthetic).
+- `tests/test_yields_multi.py`: 21 tests.
+
+Phase 2 — Replant action registration:
+- `instance/replant.py`: `add_replant_actions()` registers per-species
+  harvest actions (`harvest_SX`, `harvest_PL`, `harvest_FD`) with per-AU
+  target masks; `add_replant_salvage_actions()` for salvage → replant;
+  `replant_au_id()` computes replant AU codes (e.g. `1001` → `1001-SX`).
+- `instance/woodstock.py`: `_landscape_section()` and `write_woodstock_files()`
+  extended to add replant AU codes and yield curves; `prepare_optimization()`
+  accepts `replant_species` parameter.
+- `tests/test_replant_actions.py`: 23 tests (action registration, operability,
+  transitions, apply, salvage, backward compatibility).
+- `design/species-switching-replant.md`: Phase 1 and 2 marked complete;
+  `_REPLACE` limitation documented (ws3 hack doesn't support string
+  concatenation), per-AU mask approach adopted.
+- `design/yield-curve-framework.md`: data dependency flag, grouping
+  variables, strategy, upgrade path.
+
+All 192 tests pass (1 skipped); lint clean.
+
 ## 0.1.0a1 — 2026-08-14
 
 Phase 5 (orchestration, validation, calibration, release) complete on

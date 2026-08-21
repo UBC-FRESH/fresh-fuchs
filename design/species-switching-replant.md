@@ -79,16 +79,27 @@ Each replant action needs a yield curve for the target species at each
 site. Currently each AU has one species and one yield curve. To replant
 AU 1001 (PL site) as FD, we need an FD yield curve for that site.
 
-Options for obtaining multi-species yield curves:
-- **Site-index transfer**: use the AU's site index to look up yield
-  curves for other species (standard forestry practice)
-- **Generic curves**: species-class-average curves per site class
-- **Explicit curves from the femic bundle**: if the bundle provides
-  multi-species curves per AU
+**Status (flagged):** The tsa29mini bundle does NOT currently populate
+species proportion curves. All 108 curves are ``treated``/``untreated``
+(single-species per AU). The ``si_level`` column exists in the AU table
+but is not yet used for cross-species transfer. See
+`design/yield-curve-framework.md` for the full analysis.
 
-This is the critical data dependency. The framework can be built without
-it — the transition registration and LP wiring work regardless of
-which yield curves are available.
+Options for obtaining multi-species yield curves:
+- **Bundle species proportion curves**: The femic framework has
+  ``managed_species_curve_ids`` / ``unmanaged_species_curve_ids`` in
+  ``BundleModelContext`` — the infrastructure exists but the bundle
+  doesn't populate it yet.
+- **Site-index transfer**: Use the AU's ``si_level`` (L/M/H) as a
+  grouping variable. Within each group, apply species-specific growth
+  functions scaled by a site-index conversion factor.
+- **Generic curves**: species-class-average curves per site class
+- **Synthetic fallback**: Use species-specific Chapman-Richards growth
+  curves with parameter defaults by species class (current default path)
+
+The framework can be built without real data — the transition registration
+and LP wiring work regardless of which yield curves are available.
+See ``src/fresh_fuchs/instance/yields_multi.py`` for the implementation.
 
 ### Economics
 
@@ -166,55 +177,67 @@ the composition constraints bind on those actions.
 **Goal**: Build the data infrastructure for multi-species yield curves
 per site, without changing the LP or transition registration.
 
+**Status**: Implemented (synthetic fallback path).
+
 **Tasks**:
 1. Define a `ReplantSpecies` enum or config that maps replant action
-   codes to species classes
+   codes to species classes ✅ (uses existing `SpeciesClass`)
 2. Create a `build_multi_species_yields()` function that takes the
    existing femic bundle context and produces yield curves for all
    target species at each site (site-index transfer or generic curves)
+   ✅ Implemented in `instance/yields_multi.py`
 3. Store multi-species yields in a structured format (dict keyed by
-   `(au_id, target_species)` → yield curve)
+   `(au_id, target_species)` → yield curve) ✅ `MultiSpeciesYieldTable`
 4. Write tests using synthetic fixtures (no real bundle data)
+   ✅ `tests/test_yields_multi.py` (21 tests)
 
 **Verification**:
-- Unit tests for yield curve lookup
-- Synthetic AU with known SI produces reasonable FD curve from PL SI
-- All existing tests still pass
+- Unit tests for yield curve lookup ✅
+- Synthetic AU with known SI produces reasonable FD curve from PL SI ✅
+- All existing tests still pass ✅ (169 passed, 1 skipped)
 
 **Files**:
-- New: `src/fresh_fuchs/instance/yields_multi.py`
-- New: `tests/test_yields_multi.py`
+- New: `src/fresh_fuchs/instance/yields_multi.py` ✅
+- New: `tests/test_yields_multi.py` ✅
 
 ### Phase 2: Replant Action Registration (ws3 model changes)
 
 **Goal**: Register harvest and salvage replant actions with correct
 transitions at model bootstrap.
 
+**Status**: Implemented.
+
 **Tasks**:
-1. Create `add_replant_actions()` function (follows `add_salvage_action`
-   pattern in `fire_lp.py:240-268`)
+1. Create `add_replant_actions()` function ✅
 2. For each replant species, register:
-   - An action with `is_harvest=True`
-   - A transition targeting the appropriate AU's development type at age 0
-   - Operability matching the base harvest action
-3. Create `add_replant_salvage_actions()` for salvage → replant
-4. Wire into `bootstrap_model()` or `prepare_optimization()` with a
-   config flag (`enable_replant_actions: bool`)
+   - An action with `is_harvest=True` ✅
+   - A transition targeting the appropriate AU's development type at age 0 ✅
+   - Operability matching the base harvest action ✅
+3. Create `add_replant_salvage_actions()` for salvage → replant ✅
+4. Wire into `prepare_optimization()` with `replant_species` parameter ✅
 5. Tests verifying:
-   - Actions are registered and operable
-   - Transitions target the correct development types
-   - Backward-compatible default (no replant actions) still works
+   - Actions are registered and operable ✅
+   - Transitions target the correct development types ✅
+   - Backward-compatible default (no replant actions) still works ✅
+
+**Implementation note**: ws3's `_REPLACE` mechanism does not support
+string concatenation (the `resolve_replace` hack does a naive
+`eval(expr.replace('_TH3', dtk[i]))` which fails when `dtk[i]`
+is a numeric string). Instead, per-AU source masks are registered:
+each source AU gets its own `(?, ?, au_id, ?, ?)` → `(?, ?, au_id-SX, ?, ?)`
+transition. This is O(n_aus × n_species) transitions but keeps
+the approach simple and reliable.
 
 **Verification**:
-- Model with replant actions compiles successfully
-- `operable_area()` returns correct values for replant actions
-- `apply_action()` with replant action transitions to correct target dtk
-- Existing tests still pass with `enable_replant_actions=False`
+- Model with replant actions compiles successfully ✅
+- `operable_area()` returns correct values for replant actions ✅
+- `apply_action()` with replant action transitions to correct target dtk ✅
+- Existing tests still pass without replant actions ✅ (192 passed, 1 skipped)
 
 **Files**:
-- New: `src/fresh_fuchs/instance/replant.py`
-- Modified: `src/fresh_fuchs/instance/woodstock.py` (optional wiring)
-- New: `tests/test_replant_actions.py`
+- New: `src/fresh_fuchs/instance/replant.py` ✅
+- Modified: `src/fresh_fuchs/instance/woodstock.py` ✅
+- New: `tests/test_replant_actions.py` ✅
 
 ### Phase 3: LP Wiring (objective + even-flow)
 
@@ -323,9 +346,12 @@ of species area.
 
 ## Open Questions
 
-1. **Yield curve source**: Site-index transfer vs. generic curves vs.
-   bundle-provided. This is the critical data dependency for Phase 1.
-   Can be deferred — the framework works with placeholder curves.
+1. **Yield curve source**: The femic bundle framework supports species
+   proportion curves but the tsa29mini bundle doesn't populate them yet.
+   The ``si_level`` (L/M/H) column exists as a grouping variable for
+   site-index transfer. Synthetic curves are the current default path.
+   See ``design/yield-curve-framework.md`` and
+   ``src/fresh_fuchs/instance/yields_multi.py``.
 
 2. **Number of replant species**: All 4 (SX, PL, FD, OT) or a subset?
    Each additional species multiplies the action count. Recommend
@@ -346,13 +372,13 @@ of species area.
 
 | File | Current Role | Changes Needed |
 |------|-------------|----------------|
-| `instance/woodstock.py` | Bootstrap, transition registration | Optional: wire replant actions |
-| `instance/replant.py` | (new) Replant action registration | New file |
-| `instance/yields_multi.py` | (new) Multi-species yield curves | New file |
-| `scenario/fire_lp.py` | Fire LP, salvage action, path stepping | Extend for replant actions |
-| `economy/cashflow.py` | Harvest cash flow, replant cost | Add replant cost per species |
-| `economy/npv.py` | NPV objective wiring | Extend for replant cost |
-| `outer/policy.py` | Composition + AAC LP rows | Extend for action-based composition |
-| `outer/records.py` | PolicyRecord, CompositionTarget | Add replant_actions field |
+| `instance/woodstock.py` | Bootstrap, transition registration | ✅ Wired replant actions via `replant_species` param |
+| `instance/replant.py` | ✅ Replant action registration | Phase 2 complete |
+| `instance/yields_multi.py` | ✅ Multi-species yield curves | Phase 1 complete |
+| `scenario/fire_lp.py` | Fire LP, salvage action, path stepping | Extend for replant actions (Phase 3) |
+| `economy/cashflow.py` | Harvest cash flow, replant cost | Add replant cost per species (Phase 3) |
+| `economy/npv.py` | NPV objective wiring | Extend for replant cost (Phase 3) |
+| `outer/policy.py` | Composition + AAC LP rows | Extend for action-based composition (Phase 4) |
+| `outer/records.py` | PolicyRecord, CompositionTarget | Add replant_actions field (Phase 4) |
 | `outer/grid.py` | PolicyGrid expansion | Extend for replant config |
 | `cli.py` | CLI commands | Add --replant-species flag |

@@ -12,6 +12,7 @@ layer.
 |----------|--------|---------|
 | [composition-constraints.md](composition-constraints.md) | Implemented | Multi-species harvest-area composition targets via `composition_points` and `composition_axes` |
 | [species-switching-replant.md](species-switching-replant.md) | Design | Harvest → replant with a different species; separate harvest actions per replant species, policy-driven |
+| [yield-curve-framework.md](yield-curve-framework.md) | Implemented | Multi-species yield curve data structure and synthetic fallback; bundle dependency flagged |
 
 ## Conventions
 
