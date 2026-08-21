@@ -51,7 +51,7 @@ from fresh_fuchs.economy.cashflow import (
 )
 from fresh_fuchs.economy.npv import DevelopmentTypeKey
 from fresh_fuchs.economy.types import EconomicSurface, price_group_for_species
-from fresh_fuchs.instance.baseline import solve_even_flow
+from fresh_fuchs.instance.replant import target_species_from_acode
 from fresh_fuchs.instance.species import SpeciesClass
 from fresh_fuchs.scenario.fire import period_burn_probability, severity_burned_fraction
 from fresh_fuchs.scenario.records import DisturbanceScenario
@@ -133,7 +133,9 @@ def _burn_prob_for_dtk(
     dtk: tuple[str, ...],
     period: int,
 ) -> float:
-    au_id = int(dtk[2])
+    raw_au = dtk[2]
+    # Replant AUs use codes like "1-SX"; strip the suffix for zone lookup.
+    au_id = int(raw_au.split("-")[0]) if isinstance(raw_au, str) else int(raw_au)
     if au_id not in zone_by_au:
         known = ", ".join(sorted(str(a) for a in zone_by_au))
         raise ValueError(
@@ -175,11 +177,16 @@ def path_fire_steps(
         age = d["age"]
         ycomp = fm.dt(dtk).ycomp("totvol")
         if ycomp is None:
-            raise ValueError(f"development type {dtk} has no 'totvol' yield component")
-        yield_volume = float(ycomp[age]) * cohort_area
+            # Replant AUs (e.g. "1-SX") may not have yield curves;
+            # treat as zero volume (age-0 regenerated stand).
+            yield_volume = 0.0
+        else:
+            yield_volume = float(ycomp[age]) * cohort_area
         prob = _burn_prob_for_dtk(lookup, zone_by_au, dtk, t)
         exposed = yield_volume * survival
-        if acode == "harvest":
+        is_harvest = acode.startswith("harvest")
+        is_salvage = acode.startswith("salvage")
+        if is_harvest:
             steps.append(
                 FirePathStep(
                     period=t,
@@ -196,7 +203,7 @@ def path_fire_steps(
                 )
             )
             survival = 1.0  # regenerated stand: fresh fire exposure
-        elif acode == "salvage":
+        elif is_salvage:
             influx = prob * exposed
             salvageable = severity_frac * influx
             steps.append(
@@ -309,15 +316,24 @@ def _compile_path_z(
     surface: EconomicSurface,
     species_by_dtk: dict[DevelopmentTypeKey, SpeciesClass],
 ) -> float:
-    """Objective coefficient: discounted net cash flow along the path."""
+    """Objective coefficient: discounted net cash flow along the path.
+
+    All harvest actions (``harvest``, ``harvest_SX``, etc.) contribute
+    source-species timber revenue.  Replant actions (``harvest_SX``,
+    ``harvest_PL``, ``harvest_FD``) additionally deduct the target-species
+    replant cost.
+    """
     result = 0.0
     for step in path_fire_steps(fm, path, scenario=scenario, zone_by_au=config.zone_by_au):
         species = species_by_dtk.get(step.dtk, SpeciesClass.OTHER)
-        if step.acode == "harvest":
+        if step.acode.startswith("harvest"):
             flow = harvest_cash_flow(
                 surface, volume_m3=step.green_volume, area_ha=1.0, species=species
             )
-        elif step.acode == "salvage":
+            target_sp = target_species_from_acode(step.acode)
+            if target_sp is not None and surface.charge_replant_in_npv:
+                flow -= surface.replant_cost_per_ha(target_sp)
+        elif step.acode.startswith("salvage"):
             group = price_group_for_species(species)
             margin = sawlog_basis_salvage_margin(surface, group)
             flow = step.salvaged * margin
@@ -335,10 +351,15 @@ def _compile_path_caa(
     scenario: DisturbanceScenario,
     config: FireLpConfig,
 ) -> dict[int, float]:
-    """Even-flow row: post-fire green harvest volume by period."""
+    """Even-flow row: post-fire green harvest volume by period.
+
+    Aggregates across all harvest actions (``harvest``, ``harvest_SX``,
+    etc.) so the even-flow constraint captures total harvest volume
+    regardless of replant species.
+    """
     result: dict[int, float] = {}
     for step in path_fire_steps(fm, path, scenario=scenario, zone_by_au=config.zone_by_au):
-        if step.acode == "harvest":
+        if step.acode.startswith("harvest"):
             result[step.period] = step.green_volume
     return result
 
@@ -353,7 +374,7 @@ def _compile_path_salvage_vol(
     """Salvaged cohort volume by period (leaf row for schedule accounting)."""
     result: dict[int, float] = {}
     for step in path_fire_steps(fm, path, scenario=scenario, zone_by_au=config.zone_by_au):
-        if step.acode == "salvage" and step.salvaged != 0.0:
+        if step.acode.startswith("salvage") and step.salvaged != 0.0:
             result[step.period] = step.salvaged
     return result
 
@@ -411,7 +432,7 @@ def _compile_path_salvage_area(
     return {
         step.period: cohort_area
         for step in path_fire_steps(fm, path, scenario=scenario, zone_by_au=config.zone_by_au)
-        if step.acode == "salvage" and step.salvaged != 0.0
+        if step.acode.startswith("salvage") and step.salvaged != 0.0
     }
 
 
@@ -537,14 +558,45 @@ def solve_fire_lp(
     *,
     scenario: DisturbanceScenario,
     config: FireLpConfig,
+    replant_action_codes: tuple[str, ...] | None = None,
 ) -> pd.DataFrame:
     """Solve the fire-aware LP, apply the schedule, return per-period results.
 
     Extends the deterministic result frame (period, harvest area/volume,
     growing stock) with the salvage area/volume columns and the post-solve
     salvage-feasibility accounting (salvaged vs salvageable per period).
+
+    ``replant_action_codes``: additional harvest action codes (e.g.
+    ``("harvest_SX", "harvest_PL")``) whose volumes and areas should be
+    summed into the harvest totals.
     """
-    frame = solve_even_flow(model, problem)
+    problem.solve(verbose=False)
+    schedule = model.compile_schedule(problem)
+    model.reset()
+    model.apply_schedule(
+        schedule,
+        force_integral_area=False,
+        override_operability=False,
+        fuzzy_age=False,
+        recourse_enabled=False,
+        verbose=False,
+        compile_c_ycomps=True,
+    )
+    harvest_acodes = ["harvest"] + list(replant_action_codes or ())
+    frame = pd.DataFrame(
+        {
+            "period": model.periods,
+            "harvest_area_ha": [
+                sum(model.compile_product(p, "1.", acode=a) for a in harvest_acodes)
+                for p in model.periods
+            ],
+            "harvest_volume_m3": [
+                sum(model.compile_product(p, "totvol", acode=a) for a in harvest_acodes)
+                for p in model.periods
+            ],
+            "growing_stock_m3": [model.inventory(p, "totvol") for p in model.periods],
+        }
+    )
     accounting = salvage_volumes_from_solution(model, problem, scenario=scenario, config=config)
     frame["salvage_area_ha"] = [accounting["salvaged_area"].get(p, 0.0) for p in model.periods]
     frame["salvage_volume_m3"] = [accounting["salvaged"].get(p, 0.0) for p in model.periods]

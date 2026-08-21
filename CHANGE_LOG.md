@@ -30,7 +30,23 @@ Phase 2 — Replant action registration:
 - `design/yield-curve-framework.md`: data dependency flag, grouping
   variables, strategy, upgrade path.
 
-All 192 tests pass (1 skipped); lint clean.
+Phase 3 — LP wiring (objective + even-flow):
+- `instance/replant.py`: added `target_species_from_acode()` helper to
+  extract target species from replant action codes (e.g. `"harvest_SX"`
+  → `SpeciesClass.SPRUCE`).
+- `scenario/fire_lp.py`: `path_fire_steps` recognizes `harvest_*` and
+  `salvage_*` as harvest/salvage actions; `_burn_prob_for_dtk` strips
+  replant AU suffixes for zone lookup; `path_fire_steps` handles missing
+  yield curves on replant AUs (treats as zero volume); `_compile_path_z`
+  charges source-species timber revenue plus target-species replant cost;
+  `_compile_path_caa` aggregates volume across all harvest actions;
+  `solve_fire_lp` accepts `replant_action_codes` to sum replant volumes
+  into the harvest totals.
+- `tests/test_replant_lp.py`: 15 tests (acode parsing, survival reset,
+  LP solve, replant cost impact, even-flow aggregation, backward compat).
+- `examples/replant_lp_example.py`: end-to-end demo with synthetic data.
+
+All 207 tests pass (1 skipped); lint clean.
 
 ## 0.1.0a1 — 2026-08-14
 

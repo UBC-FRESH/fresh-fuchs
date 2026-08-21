@@ -23,6 +23,33 @@ REPLANT_SUFFIX: dict[SpeciesClass, str] = {
     SpeciesClass.OTHER: "-OT",
 }
 
+# Reverse lookup: species value (e.g. "SX") → SpeciesClass.
+_ACODE_VALUE_TO_SPECIES: dict[str, SpeciesClass] = {
+    sp.value: sp for sp in REPLANT_SUFFIX
+}
+
+
+def target_species_from_acode(acode: str) -> SpeciesClass | None:
+    """Extract the target species from a replant action code.
+
+    Returns ``SpeciesClass.SPRUCE`` for ``"harvest_SX"``,
+    ``SpeciesClass.LODGEPOLE_PINE`` for ``"salvage_PL"``, etc.
+    Returns ``None`` for base action codes (``"harvest"``, ``"salvage"``,
+    ``"null"``).
+
+    >>> target_species_from_acode("harvest_SX")
+    <SpeciesClass.SPRUCE: 'SX'>
+    >>> target_species_from_acode("salvage_FD")
+    <SpeciesClass.DOUGLAS_FIR: 'FD'>
+    >>> target_species_from_acode("harvest") is None
+    True
+    """
+    parts = acode.rsplit("_", 1)
+    if len(parts) == 2:
+        species_value = parts[1]
+        return _ACODE_VALUE_TO_SPECIES.get(species_value)
+    return None
+
 
 def replant_au_id(au_id: int | str, species: SpeciesClass) -> str:
     """Compute the replant AU code for a given source AU and target species.

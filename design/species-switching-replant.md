@@ -239,35 +239,45 @@ the approach simple and reliable.
 - Modified: `src/fresh_fuchs/instance/woodstock.py` ✅
 - New: `tests/test_replant_actions.py` ✅
 
-### Phase 3: LP Wiring (objective + even-flow)
+### Phase 3: LP Wiring (objective + even-flow) ✅
 
 **Goal**: Wire replant actions into the inner LP so the solver can
 choose replant species.
 
 **Tasks**:
-1. Extend `FireLpConfig.action_codes` to accept replant action codes
+1. Extend `FireLpConfig.action_codes` to accept replant action codes ✅
 2. Extend `compile_path_z` (NPV objective) to:
-   - Use source species for timber revenue (unchanged)
-   - Subtract replant cost for target species on replant actions
+   - Use source species for timber revenue (unchanged) ✅
+   - Subtract replant cost for target species on replant actions ✅
 3. Extend `compile_path_caa` (even-flow) to aggregate volume across
-   all replant actions (not just `harvest`)
+   all replant actions (not just `harvest`) ✅
 4. Extend `path_fire_steps` to handle replant action codes (they behave
-   like `harvest` for fire dynamics — the stand regenerates)
+   like `harvest` for fire dynamics — the stand regenerates) ✅
 5. Tests:
-   - Synthetic model with 2 replant species solves correctly
-   - Objective includes replant costs
-   - Even-flow constraint aggregates all replant actions
+   - Synthetic model with 2 replant species solves correctly ✅
+   - Objective includes replant costs ✅
+   - Even-flow constraint aggregates all replant actions ✅
 
 **Verification**:
-- LP solves with replant actions
-- Objective value includes replant cost deduction
-- Even-flow constraint works across all replant actions
-- Backward-compatible: LP with default action_codes unchanged
+- LP solves with replant actions ✅
+- Objective value includes replant cost deduction ✅
+- Even-flow constraint works across all replant actions ✅
+- Backward-compatible: LP with default action_codes unchanged ✅
+
+**Implementation notes**:
+- `_burn_prob_for_dtk` strips replant AU suffixes (e.g. `"1-SX"` → `1`)
+  for zone lookup.
+- `path_fire_steps` handles missing yield curves on replant AUs (zero
+  volume at age 0).
+- `solve_fire_lp` accepts `replant_action_codes` to sum replant volumes
+  into harvest totals.
+- `target_species_from_acode()` helper parses replant action codes.
 
 **Files**:
 - Modified: `src/fresh_fuchs/scenario/fire_lp.py`
-- Modified: `src/fresh_fuchs/economy/cashflow.py` (replant cost)
-- New: `tests/test_replant_lp.py`
+- Modified: `src/fresh_fuchs/instance/replant.py` (added `target_species_from_acode`)
+- New: `tests/test_replant_lp.py` (15 tests)
+- New: `examples/replant_lp_example.py`
 
 ### Phase 4: Composition Constraints on Actions
 
