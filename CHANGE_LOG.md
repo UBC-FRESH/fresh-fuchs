@@ -67,6 +67,11 @@ Phase 4 — Replant composition constraints:
   resolve_species, composition binding, three-phase transition,
   backward compat, grid expansion).
 
+Known limitation: ws3 `compile_problem` silently drops actions at 7+
+action codes (observed on synthetic 2-AU instance). Replant tests
+use 2 species (SX + FD, 5 actions) to avoid this; 4-species tests
+deferred to ws3 fix. Documented in `design/species-switching-replant.md`.
+
 All 223 tests pass; lint clean.
 
 ## 0.1.0a1 — 2026-08-14

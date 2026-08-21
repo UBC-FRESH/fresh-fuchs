@@ -515,9 +515,39 @@ jumping to the economic optimum.
    SILV_STATE) stays. Replant actions target different AUs (which have
    different yield curves), not different themes. No 6th theme needed.
 
-5. **Performance**: More actions = larger LP. With 4 replant species,
-   the action count goes from 3 (null, harvest, salvage) to 7. The
-   Model I tree grows proportionally. Monitor solve times on tsa29mini.
+5. **Performance and action count**: More actions = larger LP. With 4
+   replant species, the action count goes from 3 (null, harvest, salvage)
+   to 7. The Model I tree grows proportionally. Monitor solve times on
+   tsa29mini. **Known limitation**: ws3's `compile_problem` silently
+   drops actions from `model.actions` when the total action count is
+   high (observed at 7 actions on the synthetic 2-AU instance). With 2
+   replant species (SX + FD, 5 total actions) the tree compiles
+   correctly; with 4 (SX + PL + FD + OT, 7 actions) `harvest_SX` is
+   dropped. The cause is inside ws3's `add_problem`/`compile_problem`
+   path (likely the Model I tree builder prunes actions with fewer
+   feasible paths when branching factor is high). Workaround: register
+   only the 2–3 most policy-relevant species as replant targets. A
+   upstream fix in ws3 may be needed for 4-species policies.
+
+## Known Limitations
+
+1. **ws3 action-dropping at high action counts** (discovered during
+   Phase 4 testing): when `add_fire_problem` / `model.add_problem` is
+   called with 7+ action codes, ws3's `compile_problem` can silently
+   remove actions from `model.actions` even though they have valid
+   transitions and operability expressions on all DTKs. The surviving
+   actions appear to depend on action ordering in `action_codes` and
+   the internal tree-building heuristics. This is a ws3 bug, not a
+   fresh-fuchs issue. Current workaround: limit replant targets to
+   2–3 species per LP solve. The 4-species test
+   (`test_replant_composition.py`) uses 2 species (SX + FD) to avoid
+   this. When the ws3 fix lands, the tests should be expanded to all 4
+   species.
+
+2. **Bundle data not locally available**: the femic tsa29mini bundle
+   is not installed on this machine. All tests use synthetic yield
+   curves. Bundle integration should be verified once the annex data
+   is accessible.
 
 ## Key Files Reference
 
