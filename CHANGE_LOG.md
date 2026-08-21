@@ -46,7 +46,28 @@ Phase 3 — LP wiring (objective + even-flow):
   LP solve, replant cost impact, even-flow aggregation, backward compat).
 - `examples/replant_lp_example.py`: end-to-end demo with synthetic data.
 
-All 207 tests pass (1 skipped); lint clean.
+Phase 4 — Replant composition constraints:
+- `outer/records.py`: `CompositionTarget` gains `n_free_periods` and
+  `n_ramp_periods` (three-phase transition: free → ramp → binding);
+  `PolicyRecord` gains `replant_actions: tuple[str, ...] | None` to
+  control whether composition binds on target species (replant area) or
+  source species (existing behavior).
+- `outer/policy.py`: `_harvest_steps` yields acode and accepts
+  `replant_actions` filter; `_resolve_species` determines species from
+  action code or DTK; `_share_by_period` computes per-period effective
+  tolerance from the three-phase schedule; `_composition_coeff` is
+  period-aware with variable share; `policy_coeff_funcs` accepts
+  `periods` and passes `replant_actions` through.
+- `outer/grid.py`: `CompositionGridAxis` gains `n_free_periods` and
+  `n_ramp_periods`, passed through to `CompositionTarget` in axis and
+  points modes.
+- `instance/baseline.py`, `scenario/fire_lp.py`: callers of
+  `policy_coeff_funcs` pass `periods=model.periods`.
+- `tests/test_replant_composition.py`: 16 tests (share_by_period,
+  resolve_species, composition binding, three-phase transition,
+  backward compat, grid expansion).
+
+All 223 tests pass; lint clean.
 
 ## 0.1.0a1 — 2026-08-14
 

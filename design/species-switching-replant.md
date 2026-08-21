@@ -283,6 +283,8 @@ choose replant species.
 
 ### Phase 4: Replant Composition Constraints
 
+**Status**: complete.
+
 **Goal**: Composition constraints bind on replant action area (target
 species), controlling the landscape trajectory rather than harvest access.
 
