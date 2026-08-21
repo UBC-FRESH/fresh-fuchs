@@ -281,32 +281,169 @@ choose replant species.
 - Note: `cashflow.py` was not modified — replant cost is handled directly in
   `_compile_path_z` via `surface.replant_cost_per_ha(target_sp)`.
 
-### Phase 4: Composition Constraints on Actions
+### Phase 4: Replant Composition Constraints
 
-**Goal**: Composition constraints bind on replant action area instead
-of species area.
+**Goal**: Composition constraints bind on replant action area (target
+species), controlling the landscape trajectory rather than harvest access.
 
-**Tasks**:
-1. Extend `PolicyRecord` with `replant_actions: tuple[str, ...]`
-2. Modify `policy_coeff_funcs()` to generate per-action composition
-   rows when `replant_actions` is set:
-   - `comp_lo_{action}`: coefficient = `area_action - share * area_total`
-   - `comp_hi_{action}`: coefficient = `area_action - share * area_total`
-3. Extend `PolicyGrid` to accept replant action configuration
-4. Tests:
-   - Composition constraint on `harvest_pl` area share works
-   - Backward-compatible: composition on species area still works
+#### Rationale
 
-**Verification**:
+**Why replant composition, not harvest composition.**
+Current composition constraints bind on harvested area by source species
+(`policy.py:58-60`): they control which species' stands get *cut*. With
+species-switching, the novel lever is what gets *replanted*. Replant
+composition shapes landscape trajectory: a policy demanding 40% spruce
+replanting forces the solver to harvest non-spruce stands and replant
+them as spruce, gradually converting the forest. This is the long-term
+management target. Harvest composition is a short-term timber-access
+lever that already works.
+
+**Why three-phase transition (free → ramp → binding).**
+A hard composition constraint from period 1 can be infeasible. Example:
+the current forest is 60% pine, the target is 30% pine replanting, but
+only 10% of harvestable area is available in period 1 — the even-flow
+band prevents enough harvesting to meet the 30% pine replant share. The
+three-phase structure avoids this:
+
+1. **Free periods** (1 to `n_free_periods`): no composition constraint.
+   The solver harvests freely, building toward the target composition.
+2. **Ramp periods** (`n_free+1` to `n_free+n_ramp`): tolerance
+   linearly decays from 1.0 (effectively unconstrained) to `tolerance`
+   (the final band). The solver gradually shifts replant species.
+3. **Binding periods** (after ramp): full constraint at `tolerance`.
+   The landscape is near the target; the constraint maintains it.
+
+Default values (`n_free_periods=0, n_ramp_periods=0`) reproduce the
+current behavior: constraint from period 1 at fixed tolerance.
+
+**What drives species selection.**
+Without the composition constraint, the LP is indifferent to replant
+species when replant costs are equal — the objective sees
+source-species timber revenue, not target-species revenue. The
+constraint is the primary driver of species choice. With longer
+horizons, yield curve differences (growth rate × price) create a
+secondary economic incentive: the solver can see the future volume
+trajectory of the target species and prefers faster-growing,
+higher-priced species. The three-phase structure lets the solver
+exploit this secondary incentive during free periods while still
+converging to the policy target.
+
+#### Schema changes
+
+**`CompositionTarget`** (`outer/records.py`) — add two fields:
+
+```python
+n_free_periods: int = Field(default=0, ge=0,
+    description="Periods with no composition constraint.")
+n_ramp_periods: int = Field(default=0, ge=0,
+    description="Periods where tolerance decays from 1.0 to self.tolerance.")
+```
+
+Backward compatible: defaults produce current behavior.
+
+**`PolicyRecord`** — add:
+
+```python
+replant_actions: tuple[str, ...] | None = Field(
+    default=None,
+    description="Replant action codes for composition attribution. "
+    "When set, composition binds on replant action area (target species). "
+    "When None, binds on source species (current behavior).",
+)
+```
+
+**`CompositionGridAxis`** and **`PolicyGrid`** — pass through
+`n_free_periods` and `n_ramp_periods`. Grid dict entries can include
+these keys (like the existing `"tolerance"` key).
+
+#### Policy coefficient changes (`outer/policy.py`)
+
+**`_harvest_steps`** — extend to accept `replant_actions` parameter.
+When set, match `acode.startswith("harvest")` instead of
+`acode == "harvest"`, and yield the acode alongside (period, dtk, age).
+
+**`_resolve_species`** — new helper: if `replant_actions` is set, use
+`target_species_from_acode(acode)` (falling back to `species_by_dtk`
+for base `"harvest"`); otherwise use `species_by_dtk` directly.
+
+**`_composition_coeff`** — becomes period-aware. Returns raw `area_G`
+(area of target species replanted) modulated by a per-period `share`:
+
+```python
+def _composition_coeff(..., share_by_period):
+    for t, dtk, _age, acode in _harvest_steps(...):
+        sp = _resolve_species(acode, dtk, ...)
+        share = share_by_period[t]  # target_share ± tolerance_t
+        result[t] = cohort_area * ((1 if sp is target else 0) - share)
+```
+
+Bounds stay at 0 (same as current). The time-varying share is embedded
+in the coefficient.
+
+**`policy_coeff_funcs`** — generates two functions per target:
+- `comp_lo_{i}`: uses `share = target_share - tolerance_t`
+- `comp_hi_{i}`: uses `share = target_share + tolerance_t`
+
+Where `tolerance_t` varies by period (1.0 during free, decaying during
+ramp, final during binding). Passes `replant_actions` from the policy.
+
+**`_share_by_period`** — new helper that computes the per-period share
+lookup from the three-phase schedule:
+
+```
+for each period:
+  if period <= n_free:       tolerance_t = 1.0  (unconstrained)
+  elif in ramp:              tolerance_t = 1.0 - ramp_frac * (1.0 - tolerance)
+  else:                      tolerance_t = tolerance
+```
+
+#### Three-phase bounds (`policy_cgen_data`)
+
+For free periods, the coefficient uses `share = target_share ± 1.0`,
+which makes the row structurally satisfied (the bound is always met).
+The row still exists but doesn't constrain the LP. This is equivalent
+to omitting the row but avoids period-conditional row creation.
+
+#### Wiring
+
+`policy_coeff_funcs` signature changes to accept `replant_actions` from
+the `PolicyRecord`. `add_fire_problem` already passes the policy
+through — no changes needed there.
+
+#### Files
+
+| File | Change |
+|------|--------|
+| `outer/records.py` | `CompositionTarget.n_free_periods`, `n_ramp_periods`; `PolicyRecord.replant_actions` |
+| `outer/policy.py` | `_harvest_steps` extended; `_resolve_species` helper; `_composition_coeff` period-aware; `policy_coeff_funcs` passes `replant_actions`; `policy_cgen_data` three-phase bounds; `_share_by_period` helper |
+| `outer/grid.py` | `CompositionGridAxis` gets `n_free_periods`, `n_ramp_periods`; `PolicyGrid.composition_points` passes them through |
+| `design/species-switching-replant.md` | Phase 4 section rewritten with rationale |
+| `tests/test_replant_composition.py` | New: replant composition, three-phase, backward compat |
+
+#### Tests
+
+1. Replant composition constraint on `harvest_SX` area share binds
+2. Three-phase: free periods produce unconstrained LP
+3. Three-phase: ramp periods narrow tolerance linearly
+4. Backward compat: existing composition_constraints tests pass
+   (no `replant_actions` → source species attribution)
+5. `PolicyGrid` expansion with `n_free_periods` / `n_ramp_periods`
+
+#### Verification
+
 - LP with composition constraints on replant actions solves
-- Harvested area shares match targets within tolerance
+- Replanted area shares match targets within tolerance
+- Three-phase schedule prevents infeasibility on distant targets
 - Backward-compatible: existing composition_constraints tests pass
 
-**Files**:
-- Modified: `src/fresh_fuchs/outer/policy.py`
-- Modified: `src/fresh_fuchs/outer/records.py`
-- Modified: `src/fresh_fuchs/outer/grid.py`
-- New: `tests/test_replant_composition.py`
+#### What drives species selection (design note)
+
+The composition constraint is the primary driver of replant species
+choice. Without it, the LP is indifferent when replant costs are equal.
+With longer horizons, yield curve differences (growth rate × price) and
+replant cost differences create secondary incentives. The constraint
+ensures the landscape transitions at the policy pace rather than
+jumping to the economic optimum.
 
 ### Phase 5: Salvage Replant Integration
 
