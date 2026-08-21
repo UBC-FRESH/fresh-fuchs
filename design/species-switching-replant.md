@@ -278,6 +278,8 @@ choose replant species.
 - Modified: `src/fresh_fuchs/instance/replant.py` (added `target_species_from_acode`)
 - New: `tests/test_replant_lp.py` (15 tests)
 - New: `examples/replant_lp_example.py`
+- Note: `cashflow.py` was not modified — replant cost is handled directly in
+  `_compile_path_z` via `surface.replant_cost_per_ha(target_sp)`.
 
 ### Phase 4: Composition Constraints on Actions
 
