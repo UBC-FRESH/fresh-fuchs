@@ -51,6 +51,8 @@ class CompositionGridAxis(BaseModel):
     species: SpeciesClass
     values: tuple[float, ...]
     tolerance: Annotated[float, Field(ge=0.0, lt=1.0)] = 0.05
+    n_free_periods: Annotated[int, Field(ge=0)] = 0
+    n_ramp_periods: Annotated[int, Field(ge=0)] = 0
     provenance: Provenance
 
     @model_validator(mode="after")
@@ -193,10 +195,12 @@ class PolicyGrid(BaseModel):
         result: list[tuple[tuple[CompositionTarget, ...], str]] = []
         for point in self.composition_points:
             tolerance = point.get("tolerance", self.composition_tolerance)
+            n_free = int(point.get("n_free_periods", 0))
+            n_ramp = int(point.get("n_ramp_periods", 0))
             targets: list[CompositionTarget] = []
             parts: list[str] = []
             for species_str, share in point.items():
-                if species_str == "tolerance":
+                if species_str in ("tolerance", "n_free_periods", "n_ramp_periods"):
                     continue
                 species = SpeciesClass(species_str)
                 targets.append(
@@ -204,6 +208,8 @@ class PolicyGrid(BaseModel):
                         species=species,
                         target_share=share,
                         tolerance=tolerance,
+                        n_free_periods=n_free,
+                        n_ramp_periods=n_ramp,
                         provenance=self.provenance,
                     )
                 )
@@ -220,6 +226,8 @@ class PolicyGrid(BaseModel):
                 species=axis.species,
                 target_share=value,
                 tolerance=axis.tolerance,
+                n_free_periods=axis.n_free_periods,
+                n_ramp_periods=axis.n_ramp_periods,
                 provenance=axis.provenance,
             )
             for axis, value in zip(self.composition_axes, cell)

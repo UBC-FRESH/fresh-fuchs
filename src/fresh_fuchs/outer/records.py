@@ -34,9 +34,22 @@ class HarvestPolicyMode(StrEnum):
 class CompositionTarget(BaseModel):
     """Area-share target for one species group, with tolerance.
 
-    The share is the per-period harvested-area share of the target species
-    group; the policy row constrains it to ``[target_share - tolerance,
-    target_share + tolerance]``. Linear (no binaries).
+    The share is the per-period replanted-area share of the target species
+    group (when ``PolicyRecord.replant_actions`` is set) or the
+    harvested-area share of the source species (when not set).  The policy
+    row constrains it to ``[target_share - tolerance, target_share +
+    tolerance]``.  Linear (no binaries).
+
+    Three-phase transition schedule (avoids infeasibility when the
+    starting landscape is far from the target):
+
+    - **Free periods** (1 to ``n_free_periods``): no constraint.
+    - **Ramp periods** (``n_free+1`` to ``n_free+n_ramp``): tolerance
+      decays linearly from 1.0 to ``tolerance``.
+    - **Binding periods** (after ramp): full constraint at ``tolerance``.
+
+    Defaults (``n_free_periods=0, n_ramp_periods=0``) reproduce the
+    current behavior: constraint from period 1 at fixed tolerance.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -44,6 +57,8 @@ class CompositionTarget(BaseModel):
     species: SpeciesClass
     target_share: Annotated[float, Field(ge=0.0, le=1.0)]
     tolerance: Annotated[float, Field(ge=0.0, le=1.0)]
+    n_free_periods: Annotated[int, Field(ge=0)] = 0
+    n_ramp_periods: Annotated[int, Field(ge=0)] = 0
     provenance: Provenance
 
 
@@ -84,6 +99,10 @@ class PolicyRecord(BaseModel):
     """A candidate outer policy: composition targets + harvest policy.
 
     ``harvest_policy`` is optional: a policy may constrain composition only.
+
+    ``replant_actions``: when set, composition constraints bind on
+    replant action area (target species).  When ``None``, they bind on
+    source species (the existing behavior).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -91,4 +110,5 @@ class PolicyRecord(BaseModel):
     name: str
     composition_targets: tuple[CompositionTarget, ...] = ()
     harvest_policy: HarvestPolicy | None = None
+    replant_actions: tuple[str, ...] | None = None
     provenance: Provenance

@@ -494,7 +494,9 @@ def add_fire_problem(
     if policy is not None:
         from fresh_fuchs.outer.policy import policy_cgen_data, policy_coeff_funcs
 
-        coeff_funcs.update(policy_coeff_funcs(policy, species_by_dtk=species_by_dtk))
+        coeff_funcs.update(policy_coeff_funcs(
+            policy, species_by_dtk=species_by_dtk, periods=model.periods,
+        ))
         policy_rows = policy_cgen_data(
             policy, period_length=model.period_length, periods=model.periods
         )
