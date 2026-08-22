@@ -67,6 +67,29 @@ Phase 4 — Replant composition constraints:
   resolve_species, composition binding, three-phase transition,
   backward compat, grid expansion).
 
+Phase 4b — Species-specific LP outputs + Quarto report:
+- `scenario/pipeline.py`: `ScenarioRunPeriod` gains
+  `harvest_area_by_species`, `harvest_volume_by_species`,
+  `replant_area_by_species` (all `dict[str, float]`); `run_scenario_lp`
+  adds replant actions to the model when `policy.replant_actions` is
+  set, passes replant action codes to `FireLpConfig.action_codes` and
+  to `solve_fire_lp`.
+- `scenario/fire_lp.py`: `solve_fire_lp` accepts `species_by_dtk`
+  parameter; extracts per-species harvest area/volume and replant area
+  from schedule after solve+apply; attributes base `harvest` acode via
+  `species_by_dtk`, replant `harvest_*` via `target_species_from_acode`.
+- `reports/_quarto.yml`: Quarto project config (HTML format, Jupyter
+  engine).
+- `reports/replant_summary.qmd`: parameterized 11-chunk report (period
+  results table + bar chart, replant composition stacked bar, Bray-
+  Curtis dissimilarity, species harvest trajectory, salvage, policy
+  comparison table + NPV bar chart, summary metrics). Reads from env
+  vars `FUCHS_GRID_DIR` and `FUCHS_POLICY`.
+- `scripts/render_report.py`: CLI wrapper (`--rerun`, `--policy`,
+  `--grid-dir`); builds a 4-policy grid (unconstrained + 3 composition
+  targets), writes CSVs, calls `quarto render`.
+- `pyproject.toml`: `reports = ["matplotlib"]` optional dependency.
+
 Known limitation: ws3 `compile_problem` silently drops actions at 7+
 action codes (observed on synthetic 2-AU instance). Replant tests
 use 2 species (SX + FD, 5 actions) to avoid this; 4-species tests

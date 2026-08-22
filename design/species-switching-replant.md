@@ -447,6 +447,51 @@ replant cost differences create secondary incentives. The constraint
 ensures the landscape transitions at the policy pace rather than
 jumping to the economic optimum.
 
+### Phase 4b: Species-Specific LP Outputs + Quarto Report
+
+**Goal**: Expose per-species harvest/replant data from the LP and
+produce a parameterized Quarto report for result visualization.
+
+**Status**: Implemented.
+
+**Design decisions**:
+
+- **Composition = area**: The policy constraint binds on replant *area*
+  share per target species. The report shows both area composition
+  (what the policy controls) and volume composition (what economics
+  see).
+- **Bray-Curtis defaults**: Unspecified species default to 0% target
+  share. This captures absolute drift (not just proportional drift
+  among targeted species). If the policy targets 10% PL and 20% SX,
+  but the landscape replants 85% FD, BC correctly reports high
+  dissimilarity.
+- **Report aggregation**: Per-period values are shown as mean across
+  MC scenarios with min/max shaded bands. The default policy is the
+  first in the grid when no policy is specified.
+- **Env var config**: The `.qmd` reads `FUCHS_GRID_DIR` and
+  `FUCHS_POLICY` from environment variables (quarto params don't
+  inject reliably for Python kernels).
+
+**Changes**:
+
+- `ScenarioRunPeriod` gains 3 fields: `harvest_area_by_species`,
+  `harvest_volume_by_species`, `replant_area_by_species` (all
+  `dict[str, float]`).
+- `run_scenario_lp` adds replant actions to the model when
+  `policy.replant_actions` is set, passes replant action codes to
+  `FireLpConfig.action_codes` and to `solve_fire_lp`.
+- `solve_fire_lp` accepts `species_by_dtk`; extracts per-species data
+  from schedule after solve+apply; attributes base `harvest` via
+  `species_by_dtk`, replant `harvest_*` via `target_species_from_acode`.
+
+**Files**:
+- Modified: `src/fresh_fuchs/scenario/pipeline.py`
+- Modified: `src/fresh_fuchs/scenario/fire_lp.py`
+- New: `reports/_quarto.yml`
+- New: `reports/replant_summary.qmd`
+- New: `scripts/render_report.py`
+- Modified: `pyproject.toml` (`reports = ["matplotlib"]`)
+
 ### Phase 5: Salvage Replant Integration
 
 **Goal**: Salvage actions can replant with a different species.
@@ -551,15 +596,18 @@ jumping to the economic optimum.
 
 ## Key Files Reference
 
-| File | Current Role | Changes Needed |
-|------|-------------|----------------|
+| File | Current Role | Status |
+|------|-------------|--------|
 | `instance/woodstock.py` | Bootstrap, transition registration | ✅ Wired replant actions via `replant_species` param |
-| `instance/replant.py` | ✅ Replant action registration | Phase 2 complete |
-| `instance/yields_multi.py` | ✅ Multi-species yield curves | Phase 1 complete |
-| `scenario/fire_lp.py` | Fire LP, salvage action, path stepping | Extend for replant actions (Phase 3) |
-| `economy/cashflow.py` | Harvest cash flow, replant cost | Add replant cost per species (Phase 3) |
-| `economy/npv.py` | NPV objective wiring | Extend for replant cost (Phase 3) |
-| `outer/policy.py` | Composition + AAC LP rows | Extend for action-based composition (Phase 4) |
-| `outer/records.py` | PolicyRecord, CompositionTarget | Add replant_actions field (Phase 4) |
-| `outer/grid.py` | PolicyGrid expansion | Extend for replant config |
-| `cli.py` | CLI commands | Add --replant-species flag |
+| `instance/replant.py` | Replant action registration, `target_species_from_acode` | ✅ Phase 2+3 complete |
+| `instance/yields_multi.py` | Multi-species yield curves (Chapman-Richards) | ✅ Phase 1 complete |
+| `scenario/fire_lp.py` | Fire LP, salvage, path stepping, per-species extraction | ✅ Phase 3+4b complete |
+| `scenario/pipeline.py` | Scenario→LP pipeline, replant wiring, species-specific records | ✅ Phase 4b complete |
+| `outer/policy.py` | Composition + harvest LP rows, three-phase transition | ✅ Phase 4 complete |
+| `outer/records.py` | PolicyRecord (`replant_actions`), CompositionTarget (three-phase) | ✅ Phase 4 complete |
+| `outer/grid.py` | PolicyGrid expansion, `CompositionGridAxis` | ✅ Phase 4 complete |
+| `reports/replant_summary.qmd` | Quarto report (11 chunks: tables, charts, BC distance) | ✅ Phase 4b complete |
+| `scripts/render_report.py` | CLI wrapper: LP pipeline + quarto render | ✅ Phase 4b complete |
+| `economy/cashflow.py` | Harvest cash flow, replant cost | Deferred to Phase 5 |
+| `economy/npv.py` | NPV objective wiring | Deferred to Phase 5 |
+| `cli.py` | CLI commands | Deferred to Phase 6 |
