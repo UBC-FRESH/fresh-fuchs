@@ -54,6 +54,9 @@ class ScenarioRunPeriod(BaseModel):
     salvage_volume_m3: float
     salvageable_volume_m3: float
     growing_stock_m3: float
+    harvest_area_by_species: dict[str, float] = Field(default_factory=dict)
+    harvest_volume_by_species: dict[str, float] = Field(default_factory=dict)
+    replant_area_by_species: dict[str, float] = Field(default_factory=dict)
 
 
 class ScenarioRunRecord(BaseModel):
@@ -140,6 +143,18 @@ def run_scenario_lp(
     )
     model = add_salvage_action(model, max_age=config.max_age, min_salvage_age=min_salvage_age)
     model = apply_salvage_operability(model, scenario=scenario, zone_by_au=zone_by_au)
+    if policy is not None and policy.replant_actions:
+        from fresh_fuchs.instance.replant import add_replant_actions
+
+        target_species = set()
+        for acode in policy.replant_actions:
+            from fresh_fuchs.instance.replant import target_species_from_acode
+
+            sp = target_species_from_acode(acode)
+            if sp is not None:
+                target_species.add(sp)
+        if target_species:
+            model = add_replant_actions(model, target_species=tuple(target_species))
     if policy is not None and policy.harvest_policy is not None:
         from fresh_fuchs.outer.records import HarvestPolicyMode
 
@@ -147,7 +162,12 @@ def run_scenario_lp(
             from fresh_fuchs.outer.policy import apply_rotation_constraints
 
             model = apply_rotation_constraints(model, policy=policy, species_by_dtk=species_by_dtk)
-    fire_config = FireLpConfig(workers=1, zone_by_au=zone_by_au, min_salvage_age=min_salvage_age)
+    replant_codes = policy.replant_actions if policy and policy.replant_actions else ()
+    action_codes = ("null", "harvest", "salvage") + replant_codes
+    fire_config = FireLpConfig(
+        workers=1, zone_by_au=zone_by_au, min_salvage_age=min_salvage_age,
+        action_codes=action_codes,
+    )
     problem = add_fire_problem(
         model,
         fire_config,
@@ -156,7 +176,14 @@ def run_scenario_lp(
         species_by_dtk=species_by_dtk,
         policy=policy,
     )
-    results = solve_fire_lp(model, problem, scenario=scenario, config=fire_config)
+    results = solve_fire_lp(
+        model,
+        problem,
+        scenario=scenario,
+        config=fire_config,
+        replant_action_codes=policy.replant_actions if policy else None,
+        species_by_dtk=species_by_dtk,
+    )
     status = problem.status()
     summary = summarize(results, period_length=config.period_length)
     return ScenarioRunRecord(
@@ -175,6 +202,9 @@ def run_scenario_lp(
                 salvage_volume_m3=float(row.salvage_volume_m3),
                 salvageable_volume_m3=float(row.salvageable_volume_m3),
                 growing_stock_m3=float(row.growing_stock_m3),
+                harvest_area_by_species=dict(row.harvest_area_by_species),
+                harvest_volume_by_species=dict(row.harvest_volume_by_species),
+                replant_area_by_species=dict(row.replant_area_by_species),
             )
             for row in results.itertuples(index=False)
         ),

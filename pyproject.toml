@@ -51,6 +51,7 @@ docs = [
   "sphinx>=7",
   "sphinx-rtd-theme>=2",
 ]
+reports = ["matplotlib"]
 dev = [
   "build>=1.2",
   "freshforge==0.1.0a6",

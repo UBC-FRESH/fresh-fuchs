@@ -561,6 +561,7 @@ def solve_fire_lp(
     scenario: DisturbanceScenario,
     config: FireLpConfig,
     replant_action_codes: tuple[str, ...] | None = None,
+    species_by_dtk: dict[DevelopmentTypeKey, SpeciesClass] | None = None,
 ) -> pd.DataFrame:
     """Solve the fire-aware LP, apply the schedule, return per-period results.
 
@@ -571,6 +572,9 @@ def solve_fire_lp(
     ``replant_action_codes``: additional harvest action codes (e.g.
     ``("harvest_SX", "harvest_PL")``) whose volumes and areas should be
     summed into the harvest totals.
+
+    ``species_by_dtk``: development-type-key → species class mapping used
+    to attribute base ``harvest`` action area/volume to species.
     """
     problem.solve(verbose=False)
     schedule = model.compile_schedule(problem)
@@ -603,6 +607,40 @@ def solve_fire_lp(
     frame["salvage_area_ha"] = [accounting["salvaged_area"].get(p, 0.0) for p in model.periods]
     frame["salvage_volume_m3"] = [accounting["salvaged"].get(p, 0.0) for p in model.periods]
     frame["salvageable_volume_m3"] = [accounting["salvageable"].get(p, 0.0) for p in model.periods]
+
+    if replant_action_codes:
+        from fresh_fuchs.instance.replant import target_species_from_acode
+
+        ha_by_sp: dict[int, dict[str, float]] = {p: {} for p in model.periods}
+        vol_by_sp: dict[int, dict[str, float]] = {p: {} for p in model.periods}
+        replant_by_sp: dict[int, dict[str, float]] = {p: {} for p in model.periods}
+        for dtk, _age, area, acode, period, _etype in schedule:
+            if acode == "harvest":
+                if species_by_dtk is not None:
+                    sp = species_by_dtk.get(tuple(dtk))
+                    sp_key = sp.value if sp is not None else "OT"
+                else:
+                    sp_key = "OT"
+                is_replant = False
+            elif acode.startswith("harvest_"):
+                sp_cls = target_species_from_acode(acode)
+                sp_key = sp_cls.value if sp_cls is not None else "OT"
+                is_replant = True
+            else:
+                continue
+            vol = model.compile_product(period, "totvol", acode=acode)
+            ha_by_sp[period][sp_key] = ha_by_sp[period].get(sp_key, 0.0) + area
+            vol_by_sp[period][sp_key] = vol_by_sp[period].get(sp_key, 0.0) + vol
+            if is_replant:
+                replant_by_sp[period][sp_key] = replant_by_sp[period].get(sp_key, 0.0) + area
+        frame["harvest_area_by_species"] = [ha_by_sp[p] for p in model.periods]
+        frame["harvest_volume_by_species"] = [vol_by_sp[p] for p in model.periods]
+        frame["replant_area_by_species"] = [replant_by_sp[p] for p in model.periods]
+    else:
+        frame["harvest_area_by_species"] = [{} for _ in model.periods]
+        frame["harvest_volume_by_species"] = [{} for _ in model.periods]
+        frame["replant_area_by_species"] = [{} for _ in model.periods]
+
     return frame
 
 

@@ -1,0 +1,413 @@
+---
+title: "Species-Switching Replant Results"
+format: html
+---
+
+```{python}
+#| label: setup
+import ast
+import json
+import os
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+GRID_DIR = Path(os.environ.get("FUCHS_GRID_DIR", "tmp/grid/"))
+POLICY_NAME = os.environ.get("FUCHS_POLICY", None)
+
+grid_summary_path = GRID_DIR / "grid_summary.csv"
+if not grid_summary_path.exists():
+    raise FileNotFoundError(
+        f"Grid summary not found at {grid_summary_path}. "
+        "Run with params.rerun=true or provide a valid grid_dir."
+    )
+
+grid_df = pd.read_csv(grid_summary_path)
+print(f"Loaded grid summary: {len(grid_df)} policies")
+
+if POLICY_NAME is None:
+    POLICY_NAME = grid_df.iloc[0]["policy"]
+    print(f"No policy specified -- using first: '{POLICY_NAME}'")
+
+policy_row = grid_df[grid_df["policy"] == POLICY_NAME]
+if policy_row.empty:
+    raise ValueError(f"Policy '{POLICY_NAME}' not found in grid summary")
+policy_row = policy_row.iloc[0]
+
+policy_dir = GRID_DIR / POLICY_NAME
+schedule_files = sorted(policy_dir.glob("scenario_*_schedule.csv"))
+if not schedule_files:
+    raise FileNotFoundError(f"No schedule CSVs found in {policy_dir}")
+
+schedules = {}
+for sf in schedule_files:
+    idx = int(sf.stem.split("_")[1])
+    schedules[idx] = pd.read_csv(sf)
+
+n_scenarios = len(schedules)
+all_periods = sorted(schedules[0]["period"].unique())
+print(f"Loaded {n_scenarios} scenario schedules for '{POLICY_NAME}'")
+
+composition_targets = {}
+grid_json_path = GRID_DIR / "grid_summary.json"
+if grid_json_path.exists():
+    with open(grid_json_path) as f:
+        grid_json = json.load(f)
+    for result in grid_json.get("results", []):
+        pol = result.get("policy", {})
+        if pol.get("name") == POLICY_NAME:
+            for ct in pol.get("composition_targets", []):
+                sp = ct.get("species", "OT")
+                composition_targets[sp] = ct.get("target_share", 0.0)
+            break
+
+if composition_targets:
+    print(f"Composition targets: {composition_targets}")
+else:
+    print("No composition targets for this policy")
+```
+
+## Per-Period Results
+
+```{python}
+#| label: period-results-table
+#| tbl-cap: "Mean per-period results across scenarios (rounded)"
+
+rows = []
+for t in all_periods:
+    vals = {
+        "period": t,
+        "harvest_area_ha": np.mean([
+            s.loc[s["period"] == t, "harvest_area_ha"].values[0]
+            for s in schedules.values()
+        ]),
+        "harvest_volume_m3": np.mean([
+            s.loc[s["period"] == t, "harvest_volume_m3"].values[0]
+            for s in schedules.values()
+        ]),
+        "growing_stock_m3": np.mean([
+            s.loc[s["period"] == t, "growing_stock_m3"].values[0]
+            for s in schedules.values()
+        ]),
+        "salvage_area_ha": np.mean([
+            s.loc[s["period"] == t, "salvage_area_ha"].values[0]
+            for s in schedules.values()
+        ]),
+        "salvage_volume_m3": np.mean([
+            s.loc[s["period"] == t, "salvage_volume_m3"].values[0]
+            for s in schedules.values()
+        ]),
+    }
+    rows.append(vals)
+
+results_df = pd.DataFrame(rows).set_index("period")
+results_df.style.format("{:,.1f}")
+```
+
+```{python}
+#| label: harvest-volume-bar
+#| fig-cap: "Mean harvest volume per period (error bars = min/max across scenarios)"
+
+means = [
+    np.mean([s.loc[s["period"] == t, "harvest_volume_m3"].values[0]
+             for s in schedules.values()])
+    for t in all_periods
+]
+mins = [
+    np.min([s.loc[s["period"] == t, "harvest_volume_m3"].values[0]
+            for s in schedules.values()])
+    for t in all_periods
+]
+maxs = [
+    np.max([s.loc[s["period"] == t, "harvest_volume_m3"].values[0]
+            for s in schedules.values()])
+    for t in all_periods
+]
+
+fig, ax = plt.subplots()
+ax.bar(all_periods, means, color="#4C72B0", alpha=0.8, label="Mean")
+ax.errorbar(
+    all_periods, means,
+    yerr=[np.array(means) - np.array(mins), np.array(maxs) - np.array(means)],
+    fmt="none", color="black", capsize=4, label="Min-Max",
+)
+ax.set_xlabel("Period")
+ax.set_ylabel("Harvest volume (m3)")
+ax.set_title(f"Harvest Volume -- {POLICY_NAME}")
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+## Species Composition
+
+```{python}
+#| label: replant-composition-stacked
+#| fig-cap: "Mean replant area by species per period (stacked, shaded = min/max)"
+
+all_species_keys = set()
+for s in schedules.values():
+    for t in all_periods:
+        row = s[s["period"] == t]
+        if "replant_area_by_species" in row.columns:
+            val = row["replant_area_by_species"].values[0]
+            if isinstance(val, str):
+                val = ast.literal_eval(val)
+            all_species_keys.update(val.keys())
+
+if all_species_keys:
+    species_order = sorted(all_species_keys)
+    colors = {"SX": "#1f77b4", "PL": "#ff7f0e", "FD": "#2ca02c", "OT": "#d62728"}
+
+    fig, ax = plt.subplots()
+    bottoms_mean = np.zeros(len(all_periods))
+
+    for sp in species_order:
+        sp_means = []
+        sp_mins = []
+        sp_maxs = []
+        for t in all_periods:
+            per_sc = []
+            for s in schedules.values():
+                row = s[s["period"] == t]
+                val = row["replant_area_by_species"].values[0]
+                if isinstance(val, str):
+                    val = ast.literal_eval(val)
+                per_sc.append(val.get(sp, 0.0))
+            sp_means.append(np.mean(per_sc))
+            sp_mins.append(np.min(per_sc))
+            sp_maxs.append(np.max(per_sc))
+
+        ax.bar(all_periods, sp_means, bottom=bottoms_mean,
+               color=colors.get(sp, "#999999"), label=sp, alpha=0.8)
+        ax.fill_between(
+            all_periods,
+            bottoms_mean + np.array(sp_mins),
+            bottoms_mean + np.array(sp_maxs),
+            alpha=0.15, color=colors.get(sp, "#999999"),
+        )
+        bottoms_mean += np.array(sp_means)
+
+    ax.set_xlabel("Period")
+    ax.set_ylabel("Replant area (ha)")
+    ax.set_title(f"Replant Composition -- {POLICY_NAME}")
+    ax.legend(title="Species")
+    plt.tight_layout()
+    plt.show()
+else:
+    print("No replant area data available")
+```
+
+```{python}
+#| label: bray-curtis
+#| fig-cap: "Bray-Curtis dissimilarity (0 = matches target, 1 = completely different)"
+
+def bray_curtis(actual, target):
+    all_sp = set(actual.keys()) | set(target.keys())
+    num = sum(abs(actual.get(s, 0.0) - target.get(s, 0.0)) for s in all_sp)
+    den = sum(actual.get(s, 0.0) + target.get(s, 0.0) for s in all_sp)
+    return num / den if den > 0 else 0.0
+
+if composition_targets:
+    bc_means = []
+    bc_mins = []
+    bc_maxs = []
+
+    for t in all_periods:
+        bc_per_sc = []
+        for s in schedules.values():
+            row = s[s["period"] == t]
+            val = row["replant_area_by_species"].values[0]
+            if isinstance(val, str):
+                val = ast.literal_eval(val)
+            total_area = sum(val.values())
+            if total_area > 0:
+                actual = {k: v / total_area for k, v in val.items()}
+            else:
+                actual = {}
+            bc_per_sc.append(bray_curtis(actual, composition_targets))
+
+        bc_means.append(np.mean(bc_per_sc))
+        bc_mins.append(np.min(bc_per_sc))
+        bc_maxs.append(np.max(bc_per_sc))
+
+    fig, ax = plt.subplots()
+    ax.plot(all_periods, bc_means, "o-", color="#C44E52", label="Mean")
+    ax.fill_between(all_periods, bc_mins, bc_maxs, alpha=0.2, color="#C44E52", label="Min-Max")
+    ax.set_xlabel("Period")
+    ax.set_ylabel("Bray-Curtis dissimilarity")
+    ax.set_title(f"Composition Drift -- {POLICY_NAME}")
+    ax.set_ylim(0, 1)
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
+else:
+    print("No composition targets -- BC distance not applicable")
+```
+
+## Harvest Trajectory by Species
+
+```{python}
+#| label: harvest-species-line
+#| fig-cap: "Mean harvest volume by species per period (line = mean, shaded = min/max)"
+
+all_hvol_keys = set()
+for s in schedules.values():
+    for t in all_periods:
+        row = s[s["period"] == t]
+        if "harvest_volume_by_species" in row.columns:
+            val = row["harvest_volume_by_species"].values[0]
+            if isinstance(val, str):
+                val = ast.literal_eval(val)
+            all_hvol_keys.update(val.keys())
+
+if all_hvol_keys:
+    colors = {"SX": "#1f77b4", "PL": "#ff7f0e", "FD": "#2ca02c", "OT": "#d62728"}
+
+    fig, ax = plt.subplots()
+    for sp in sorted(all_hvol_keys):
+        sp_means = []
+        sp_mins = []
+        sp_maxs = []
+        for t in all_periods:
+            per_sc = []
+            for s in schedules.values():
+                row = s[s["period"] == t]
+                val = row["harvest_volume_by_species"].values[0]
+                if isinstance(val, str):
+                    val = ast.literal_eval(val)
+                per_sc.append(val.get(sp, 0.0))
+            sp_means.append(np.mean(per_sc))
+            sp_mins.append(np.min(per_sc))
+            sp_maxs.append(np.max(per_sc))
+
+        c = colors.get(sp, "#999999")
+        ax.plot(all_periods, sp_means, "o-", color=c, label=sp)
+        ax.fill_between(all_periods, sp_mins, sp_maxs, alpha=0.15, color=c)
+
+    ax.set_xlabel("Period")
+    ax.set_ylabel("Harvest volume (m3)")
+    ax.set_title(f"Harvest by Species -- {POLICY_NAME}")
+    ax.legend(title="Species")
+    plt.tight_layout()
+    plt.show()
+else:
+    print("No species-specific harvest data available")
+```
+
+## Salvage
+
+```{python}
+#| label: salvage-table
+#| tbl-cap: "Mean salvage results across scenarios (rounded)"
+
+salvage_rows = []
+for t in all_periods:
+    salvage_rows.append({
+        "period": t,
+        "salvage_area_ha": round(np.mean([
+            s.loc[s["period"] == t, "salvage_area_ha"].values[0]
+            for s in schedules.values()
+        ]), 1),
+        "salvage_volume_m3": round(np.mean([
+            s.loc[s["period"] == t, "salvage_volume_m3"].values[0]
+            for s in schedules.values()
+        ]), 0),
+        "salvageable_volume_m3": round(np.mean([
+            s.loc[s["period"] == t, "salvageable_volume_m3"].values[0]
+            for s in schedules.values()
+        ]), 0),
+    })
+
+pd.DataFrame(salvage_rows).set_index("period")
+```
+
+```{python}
+#| label: salvage-bar
+#| fig-cap: "Mean salvage volume per period (error bars = min/max)"
+
+s_means = [
+    np.mean([s.loc[s["period"] == t, "salvage_volume_m3"].values[0]
+             for s in schedules.values()])
+    for t in all_periods
+]
+s_mins = [
+    np.min([s.loc[s["period"] == t, "salvage_volume_m3"].values[0]
+            for s in schedules.values()])
+    for t in all_periods
+]
+s_maxs = [
+    np.max([s.loc[s["period"] == t, "salvage_volume_m3"].values[0]
+            for s in schedules.values()])
+    for t in all_periods
+]
+
+fig, ax = plt.subplots()
+ax.bar(all_periods, s_means, color="#DD8452", alpha=0.8, label="Mean")
+ax.errorbar(
+    all_periods, s_means,
+    yerr=[np.array(s_means) - np.array(s_mins), np.array(s_maxs) - np.array(s_means)],
+    fmt="none", color="black", capsize=4, label="Min-Max",
+)
+ax.set_xlabel("Period")
+ax.set_ylabel("Salvage volume (m3)")
+ax.set_title(f"Salvage Volume -- {POLICY_NAME}")
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+## Policy Comparison
+
+```{python}
+#| label: policy-summary-table
+#| tbl-cap: "Grid summary across all policies"
+
+grid_df[["policy", "status", "mean_npv", "min_npv", "max_npv", "mean_annual_harvest_m3_per_yr"]]
+```
+
+```{python}
+#| label: npv-comparison-bar
+#| fig-cap: "Mean NPV per policy (error bars = min/max across scenarios)"
+
+policies = grid_df["policy"].tolist()
+npv_means = grid_df["mean_npv"].tolist()
+npv_mins = grid_df["min_npv"].tolist()
+npv_maxs = grid_df["max_npv"].tolist()
+
+fig, ax = plt.subplots()
+bars = ax.barh(policies, npv_means, color="#4C72B0", alpha=0.8)
+ax.errorbar(
+    npv_means, policies,
+    xerr=[np.array(npv_means) - np.array(npv_mins), np.array(npv_maxs) - np.array(npv_means)],
+    fmt="none", color="black", capsize=4,
+)
+ax.set_xlabel("NPV (CAD)")
+ax.set_title("NPV Comparison Across Policies")
+plt.tight_layout()
+plt.show()
+```
+
+## Summary Metrics
+
+```{python}
+#| label: summary-metrics
+
+total_harvest = sum([
+    s["harvest_volume_m3"].sum() for s in schedules.values()
+]) / n_scenarios
+total_area = sum([
+    s["harvest_area_ha"].sum() for s in schedules.values()
+]) / n_scenarios
+mean_annual = total_harvest / (len(all_periods) * 10)
+
+print(f"Policy:              {POLICY_NAME}")
+print(f"Scenarios:           {n_scenarios}")
+print(f"Mean NPV:            ${policy_row['mean_npv']:,.0f}")
+print(f"NPV range:           ${policy_row['min_npv']:,.0f} -- ${policy_row['max_npv']:,.0f}")
+print(f"Total harvest:       {total_harvest:,.0f} m3")
+print(f"Total area:          {total_area:,.1f} ha")
+print(f"Mean annual harvest: {mean_annual:,.0f} m3/yr")
+```
