@@ -30,8 +30,13 @@ grid_df = pd.read_csv(grid_summary_path)
 print(f"Loaded grid summary: {len(grid_df)} policies")
 
 if POLICY_NAME is None:
-    POLICY_NAME = grid_df.iloc[0]["policy"]
-    print(f"No policy specified -- using first: '{POLICY_NAME}'")
+    # Prefer a constrained policy over unconstrained for richer visuals
+    non_unconstrained = grid_df[~grid_df["policy"].str.contains("unconstrained")]
+    if len(non_unconstrained) > 0:
+        POLICY_NAME = non_unconstrained.iloc[0]["policy"]
+    else:
+        POLICY_NAME = grid_df.iloc[0]["policy"]
+    print(f"No policy specified -- using: '{POLICY_NAME}'")
 
 policy_row = grid_df[grid_df["policy"] == POLICY_NAME]
 if policy_row.empty:
