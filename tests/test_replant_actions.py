@@ -246,6 +246,132 @@ class TestReplantApply:
         assert "PL" in str(new_dtk[2])
 
 
+class TestReplantPrecreatedDtypes:
+    """Verify that replant DTKs are pre-created with correct wiring."""
+
+    def test_replant_dtypes_exist(self, tmp_path: Path) -> None:
+        model = _build_model_with_replant(
+            tmp_path,
+            target_species=(SpeciesClass.SPRUCE, SpeciesClass.DOUGLAS_FIR),
+        )
+        # Original AUs are 1 and 2; SX/FD replant DTKs should exist
+        au2_dtk = [d for d in model.dtypes if d[2] == "2"]
+        assert len(au2_dtk) >= 1
+        base = au2_dtk[0]
+        sx_key = list(base)
+        sx_key[2] = "2-SX"
+        fd_key = list(base)
+        fd_key[2] = "2-FD"
+        assert tuple(sx_key) in model.dtypes, "2-SX DTK not pre-created"
+        assert tuple(fd_key) in model.dtypes, "2-FD DTK not pre-created"
+
+    def test_replant_dtypes_have_null_operable(self, tmp_path: Path) -> None:
+        model = _build_model_with_replant(
+            tmp_path,
+            target_species=(SpeciesClass.SPRUCE, SpeciesClass.DOUGLAS_FIR),
+        )
+        for dtk, dt in model.dtypes.items():
+            if "SX" not in str(dtk) and "FD" not in str(dtk):
+                continue
+            assert "null" in dt.oper_expr, f"null missing on {dtk}"
+
+    def test_replant_dtypes_have_yields(self, tmp_path: Path) -> None:
+        model = _build_model_with_replant(
+            tmp_path,
+            target_species=(SpeciesClass.SPRUCE, SpeciesClass.DOUGLAS_FIR),
+        )
+        for dtk, dt in model.dtypes.items():
+            if "SX" not in str(dtk) and "FD" not in str(dtk):
+                continue
+            ynames = list(dt.ycomps())
+            assert "totvol" in ynames, f"totvol missing on {dtk}"
+
+    def test_replant_dtypes_have_transitions(self, tmp_path: Path) -> None:
+        model = _build_model_with_replant(
+            tmp_path,
+            target_species=(SpeciesClass.SPRUCE, SpeciesClass.DOUGLAS_FIR),
+        )
+        for dtk, dt in model.dtypes.items():
+            if "SX" not in str(dtk) and "FD" not in str(dtk):
+                continue
+            # Must have transitions for harvest_SX and harvest_FD
+            for acode in ("harvest_SX", "harvest_FD"):
+                assert (acode, -1) in dt.transitions, (
+                    f"{acode} transition missing on {dtk}"
+                )
+
+    def test_deeper_horizon_tree_builds(self, tmp_path: Path) -> None:
+        """With horizon=10, stands reach harvest age; tree must build."""
+        from fresh_fuchs.economy.types import interior_surface
+        from fresh_fuchs.scenario import (
+            DisturbanceScenario,
+            FireEvent,
+            FireLpConfig,
+            add_fire_problem,
+            add_salvage_action,
+        )
+        from fresh_fuchs.scenario.fire_lp import (
+            apply_salvage_operability,
+            solve_fire_lp,
+        )
+
+        config = synthetic_instance_config(tmp_path, horizon=10)
+        write_woodstock_files(
+            areas=build_synthetic_areas(),
+            yields=build_synthetic_yields(),
+            config=config,
+        )
+        model = prepare_optimization(
+            bootstrap_model(config), max_initial_age=300, config=config
+        )
+        model = add_replant_actions(
+            model,
+            target_species=(SpeciesClass.SPRUCE, SpeciesClass.DOUGLAS_FIR),
+        )
+        model = add_salvage_action(model, max_age=300)
+        zone_by_au = {1: "SBPS", 2: "IDF"}
+        scenario = DisturbanceScenario(
+            name="test",
+            seed=42,
+            probability=1.0,
+            burn_rate_multiplier=1.0,
+            price_factor=1.0,
+            severity="Moderate",
+            events=tuple(
+                FireEvent(
+                    period=t, zone=z,
+                    annual_burn_rate=0.05, severity="Moderate",
+                )
+                for z in zone_by_au.values()
+                for t in range(1, 10)
+            ),
+        )
+        model = apply_salvage_operability(
+            model, scenario=scenario, zone_by_au=zone_by_au
+        )
+        species_map = {
+            ("29", "managed", "1", "natural", "baseline"): SpeciesClass.LODGEPOLE_PINE,
+            ("29", "managed", "1", "planted", "baseline"): SpeciesClass.LODGEPOLE_PINE,
+            ("29", "managed", "2", "natural", "baseline"): SpeciesClass.DOUGLAS_FIR,
+            ("29", "unmanaged", "2", "natural", "baseline"): SpeciesClass.OTHER,
+        }
+        cfg = FireLpConfig(
+            zone_by_au=zone_by_au,
+            action_codes=("null", "harvest", "salvage", "harvest_SX", "harvest_FD"),
+        )
+        p = add_fire_problem(
+            model, cfg, scenario=scenario,
+            surface=interior_surface(), species_by_dtk=species_map,
+        )
+        results = solve_fire_lp(
+            model, p, scenario=scenario, config=cfg,
+            replant_action_codes=("harvest_SX", "harvest_FD"),
+            species_by_dtk=species_map,
+        )
+        assert p.z() > 0
+        assert len(results) == 10
+
+
 # ---------------------------------------------------------------------------
 # add_replant_salvage_actions
 # ---------------------------------------------------------------------------

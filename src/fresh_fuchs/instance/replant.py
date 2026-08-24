@@ -54,12 +54,32 @@ def target_species_from_acode(acode: str) -> SpeciesClass | None:
 def replant_au_id(au_id: int | str, species: SpeciesClass) -> str:
     """Compute the replant AU code for a given source AU and target species.
 
+    Strips any existing replant suffix before appending the new one.
+
     >>> replant_au_id(1001, SpeciesClass.SPRUCE)
     '1001-SX'
     >>> replant_au_id("204", SpeciesClass.LODGEPOLE_PINE)
     '204-PL'
+    >>> replant_au_id("1-SX", SpeciesClass.DOUGLAS_FIR)
+    '1-FD'
     """
-    return f"{au_id}{REPLANT_SUFFIX[species]}"
+    base = _strip_replant_suffix(au_id)
+    return f"{base}{REPLANT_SUFFIX[species]}"
+
+
+def _strip_replant_suffix(au_id: str) -> str:
+    """Remove any replant suffix from an AU code.
+
+    >>> _strip_replant_suffix('1-SX')
+    '1'
+    >>> _strip_replant_suffix('2')
+    '2'
+    """
+    s = str(au_id)
+    for suffix in REPLANT_SUFFIX.values():
+        if s.endswith(suffix):
+            return s[: -len(suffix)]
+    return s
 
 
 def _collect_au_ids(model: ws3.forest.ForestModel) -> list[str]:
@@ -73,7 +93,7 @@ def _build_per_au_transitions(
 ) -> dict[tuple[str, ...], dict[str, list[tuple]]]:
     """Build per-AU transition dicts for a replant species.
 
-    Returns a dict keyed by source mask → ``{condition: [target_tuple]}``.
+    Returns a dict keyed by source mask -> ``{condition: [target_tuple]}``.
     Each source AU gets its own mask so the target AU is computed
     deterministically.
     """
@@ -106,6 +126,12 @@ def add_replant_actions(
     - Per-AU transitions that send each source AU to its corresponding
       replant AU at age 0
 
+    Also pre-creates the replant DTKs in ``model.dtypes`` so that
+    ws3's tree builder can follow replant transitions without crashing.
+    Each replant DTK is initialised with the same yield curves as its
+    source AU, zero initial area, and transitions for all registered
+    replant actions.
+
     The base ``harvest`` action is **not** modified. If a policy wants
     same-species replanting only, it simply does not include the new
     action codes.
@@ -120,7 +146,8 @@ def add_replant_actions(
         Override the operability bounds. If *None*, inherit from the
         existing ``harvest`` action's operability expression.
     """
-    wildcard_mask = tuple("?" for _ in range(model.nthemes()))
+    n = model.nthemes()
+    wildcard_mask = tuple("?" for _ in range(n))
     if min_harvest_age is not None and max_harvest_age is not None:
         oper_expr = f"_age >= {min_harvest_age} and _age <= {max_harvest_age}"
     else:
@@ -129,6 +156,8 @@ def add_replant_actions(
             raise ValueError(
                 "base 'harvest' action not found; cannot derive operability"
             )
+
+    all_acodes: list[str] = []
 
     for species in target_species:
         acode = f"harvest_{species.value}"
@@ -144,14 +173,95 @@ def add_replant_actions(
         for dtk in model.dtypes:
             dt = model.dtypes[dtk]
             dt.oper_expr[acode] = [oper_expr]
-            source_mask = tuple("?" if i != 2 else dtk[2] for i in range(model.nthemes()))
+            source_mask = tuple("?" if i != 2 else dtk[2] for i in range(n))
             if source_mask in per_au_transitions:
                 dt.transitions[acode, -1] = per_au_transitions[source_mask][""]
 
         for period in model.applied_actions:
             model.applied_actions[period][acode] = {}
 
+        all_acodes.append(acode)
+
+    if all_acodes:
+        _precreate_replant_dtypes(model, target_species, all_acodes, oper_expr)
+
     return model
+
+
+def _precreate_replant_dtypes(
+    model: ws3.forest.ForestModel,
+    target_species: tuple[SpeciesClass, ...],
+    all_acodes: list[str],
+    oper_expr: str,
+) -> None:
+    """Pre-create replant DTKs with yield curves and transitions.
+
+    ws3's ``create_dtype_fromkey`` uses theme-hierarchy mask matching,
+    which cannot resolve non-standard AU codes like ``1-SX``.  This
+    function bypasses that by creating ``DevelopmentType`` objects
+    directly and wiring up their yield curves and transitions.
+
+    For each original DTK and each target species, the corresponding
+    replant DTK is created (if not already present) with:
+
+    - Yield curves copied from the source AU's DTK
+    - Operability and transitions for ALL registered actions
+      (copied from existing DTKs via model-level oper_expr)
+    - Zero initial area
+    """
+    n = model.nthemes()
+    source_dtks = list(model.dtypes.keys())
+
+    for source_dtk in source_dtks:
+        source_dt = model.dtypes[source_dtk]
+        for species in target_species:
+            replant_key = list(source_dtk)
+            replant_key[2] = replant_au_id(source_dtk[2], species)
+            replant_key = tuple(replant_key)
+
+            if replant_key in model.dtypes:
+                dt = model.dtypes[replant_key]
+            else:
+                dt = ws3.forest.DevelopmentType(replant_key, model)
+                model.dtypes[replant_key] = dt
+
+                # Copy yield curves from source DTK
+                for yname in source_dt.ycomps():
+                    ycomp = source_dt.ycomp(yname)
+                    dt.add_ycomp("a", yname, ycomp)
+
+            # Wire up ALL model-level actions on this DTK
+            for acode in model.actions:
+                # Copy operability expression from model-level (not the
+                # harvest-only oper_expr; e.g. null needs _age >= 0)
+                if acode not in dt.oper_expr:
+                    model_oper = next(
+                        iter(model.oper_expr.get(acode, {}).values()), oper_expr
+                    )
+                    dt.oper_expr[acode] = [model_oper]
+
+                # Copy transitions: for replant actions, set self-loop;
+                # for base actions, replicate from source DTK if available.
+                if (acode, -1) not in dt.transitions:
+                    if acode in all_acodes:
+                        # Replant action: target is the species of THIS action
+                        sp = target_species[
+                            all_acodes.index(acode)
+                        ]
+                        target_au = replant_au_id(replant_key[2], sp)
+                        target_mask = tuple(
+                            "?" if i != 2 else target_au for i in range(n)
+                        )
+                        dt.transitions[acode, -1] = [
+                            (target_mask, 1.0, None, 0, None, None, None)
+                        ]
+                    else:
+                        # Base action: copy from source DTK if it has transitions
+                        for age_key in source_dt.transitions:
+                            if age_key[0] == acode:
+                                dt.transitions[acode, -1] = source_dt.transitions[
+                                    age_key
+                                ]
 
 
 def add_replant_salvage_actions(

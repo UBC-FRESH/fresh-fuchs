@@ -296,7 +296,12 @@ def apply_salvage_operability(
     """
     lookup = build_burn_prob_lookup(scenario, model.period_length)
     for dtk, dt in model.dtypes.items():
-        au_id = int(dtk[2])
+        au_raw = dtk[2]
+        au_id_str = au_raw.split("-")[0] if "-" in au_raw else au_raw
+        try:
+            au_id = int(au_id_str)
+        except (ValueError, TypeError):
+            continue  # skip replant DTKs with non-numeric AU codes
         if au_id not in zone_by_au:
             raise ValueError(f"development type {dtk} has no BEC zone for au_id {au_id}")
         zone = zone_by_au[au_id].upper()

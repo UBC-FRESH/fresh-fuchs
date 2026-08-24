@@ -97,6 +97,25 @@ deferred to ws3 fix. Documented in `design/species-switching-replant.md`.
 
 All 223 tests pass; lint clean.
 
+Replant DTK pre-creation fix:
+- `instance/replant.py`: `add_replant_actions` now pre-creates
+  replant DTKs (e.g. `1-SX`, `2-FD`) in `model.dtypes` before tree
+  building, with yield curves copied from source DTKs, correct
+  per-action operability, and `(acode, -1)` transitions.  This
+  prevents ws3's `_bld_tree_m1` from crashing when stands reach
+  harvest age after replanting (horizon >= 7 periods).
+  `replant_au_id` now strips existing suffixes before appending
+  (prevents double-suffix `1-FD-SX`).
+- `scenario/fire_lp.py`: `apply_salvage_operability` strips replant
+  suffixes before `int()` to avoid `ValueError` on replant DTK keys.
+- `examples/replant_lp_example.py`: rewritten to run N MC fire
+  scenarios with `generate_scenarios` + `ScenarioGenerationParams`;
+  10-scenario × 100-yr demo with two policies.
+- `tests/test_replant_actions.py`: 5 new tests in
+  `TestReplantPrecreatedDtypes` (DTK existence, null operability,
+  yield curves, transitions, horizon-10 tree build + solve).
+  Total: 174 tests pass; lint clean.
+
 ## 0.1.0a1 — 2026-08-14
 
 Phase 5 (orchestration, validation, calibration, release) complete on
