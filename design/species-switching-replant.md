@@ -228,11 +228,46 @@ each source AU gets its own `(?, ?, au_id, ?, ?)` → `(?, ?, au_id-SX, ?, ?)`
 transition. This is O(n_aus × n_species) transitions but keeps
 the approach simple and reliable.
 
+**DTK pre-creation** (`_precreate_replant_dtypes`): ws3's `_bld_tree_m1`
+follows transitions to target DTKs during tree construction. If the
+target DTK does not exist in `model.dtypes`, it calls
+`create_dtype_fromkey` which uses `match_mask` → `_expand_theme` to
+resolve theme values. Replant AU codes like `1-SX` are not in the
+theme hierarchy (themes have integer AU IDs), so mask matching fails
+silently and the DTK is never created. The result is a `TypeError`
+('NoneType' object is not subscriptable) at `_bld_tree_m1:1164` when
+stands reach harvest age.
+
+This only manifests with `horizon >= 7` periods (stand age 60 at
+period 7 for 10-yr periods). Shorter horizons mask the bug because
+no stands reach harvest age before the planning horizon ends.
+
+Fix: `add_replant_actions` now calls `_precreate_replant_dtypes`
+after registering actions but before tree building. For each replant
+target (e.g. AU 1 + SPRUCE → DTK `1-SX`):
+1. Creates a `DevelopmentType` with the replant DTK key
+2. Copies yield curves from the source DTK
+3. Wires per-action operability (null: age 0–400, harvest: 60–300,
+   salvage: 0–400, replant actions: correct age bounds)
+4. Sets `(acode, -1)` transitions for all actions
+
+**`replant_au_id` suffix stripping**: `replant_au_id(au, species)`
+strips any existing replant suffix before appending the new species
+suffix. `replant_au_id('1-FD', SPRUCE)` → `'1-SX'` (not `'1-FD-SX'`).
+This prevents double-suffix DTKs when an AU already has a replant
+suffix from a prior call.
+
+**`apply_salvage_operability` fix**: parses `int(dtk[2])` to look up
+the base AU for zone-based operability. Replant DTKs like `'1-SX'`
+fail `int()`. Fix: strip replant suffix (split on `-`) before
+conversion. This is in `scenario/fire_lp.py:~298`.
+
 **Verification**:
 - Model with replant actions compiles successfully ✅
 - `operable_area()` returns correct values for replant actions ✅
 - `apply_action()` with replant action transitions to correct target dtk ✅
 - Existing tests still pass without replant actions ✅ (192 passed, 1 skipped)
+- Deep-horizon tree build (horizon=10) with pre-created DTKs ✅
 
 **Files**:
 - New: `src/fresh_fuchs/instance/replant.py` ✅
@@ -599,9 +634,9 @@ produce a parameterized Quarto report for result visualization.
 | File | Current Role | Status |
 |------|-------------|--------|
 | `instance/woodstock.py` | Bootstrap, transition registration | ✅ Wired replant actions via `replant_species` param |
-| `instance/replant.py` | Replant action registration, `target_species_from_acode` | ✅ Phase 2+3 complete |
+| `instance/replant.py` | Replant action registration, DTK pre-creation, `target_species_from_acode` | ✅ Phase 2+3 complete (pre-creation fix applied) |
 | `instance/yields_multi.py` | Multi-species yield curves (Chapman-Richards) | ✅ Phase 1 complete |
-| `scenario/fire_lp.py` | Fire LP, salvage, path stepping, per-species extraction | ✅ Phase 3+4b complete |
+| `scenario/fire_lp.py` | Fire LP, salvage, path stepping, per-species extraction, replant DTK operability | ✅ Phase 3+4b complete (operability fix applied) |
 | `scenario/pipeline.py` | Scenario→LP pipeline, replant wiring, species-specific records | ✅ Phase 4b complete |
 | `outer/policy.py` | Composition + harvest LP rows, three-phase transition | ✅ Phase 4 complete |
 | `outer/records.py` | PolicyRecord (`replant_actions`), CompositionTarget (three-phase) | ✅ Phase 4 complete |
