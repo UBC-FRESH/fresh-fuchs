@@ -10,6 +10,8 @@ layer.
 
 | Document | Status | Summary |
 |----------|--------|---------|
+| [fire-regime.md](fire-regime.md) | Implemented (species-specific extension: Design) | Fire regime rationale, LP encoding semantics, validation evidence, limitations, and species-specific parameterization roadmap |
+| [parameters.md](parameters.md) | Reference | Consolidated parameter reference: user-adaptable and internal parameters by theme, with defaults, units, application sites, and implementation status |
 | [composition-constraints.md](composition-constraints.md) | Implemented | Multi-species harvest-area composition targets via `composition_points` and `composition_axes` |
 | [species-switching-replant.md](species-switching-replant.md) | Design | Harvest → replant with a different species; separate harvest actions per replant species, policy-driven |
 | [yield-curve-framework.md](yield-curve-framework.md) | Implemented | Multi-species yield curve data structure and synthetic fallback; bundle dependency flagged |

@@ -2,6 +2,35 @@
 
 Append-only project narrative, reverse-chronological.
 
+## Unreleased — fire regime design note (documentation)
+
+- `design/fire-regime.md`: design note on the wildfire regime — real-world
+  semantics (zone MFRI ladder, severity ladder, burned-wood decay,
+  harvest→fire→salvage→decay ordering, full-foresight MC treatment),
+  LP encoding via path-dependent survival coefficients and the salvage
+  action, validation summary (fresh-salvage parity, fire-free anchor
+  reproduction, burn-multiplier monotonicity table, MC convergence
+  guidance n≈40, LP-size bounds), recorded limitations (no spatial
+  spread, age-independent hazard, expected-value within-scenario burns,
+  uniform severity tier, untracked burned carryover), and a
+  species-specific parameterization roadmap (hazard by fuel type,
+  mortality by species×age, salvageability by species, per-fuel-type
+  severity; stratum codes already carry the leading species).
+- `design/README.md`: index the new document.
+- `design/parameters.md`: cross-link §5 Fire dynamics to the new note.
+
+## Unreleased — parameter reference (documentation)
+
+- `design/parameters.md`: consolidated parameter reference across all
+  layers — instance/horizon, yields & species, economic surface, fhops
+  costing, fire dynamics, MC scenario generation, inner LP, outer policy,
+  risk/ranking, orchestration, reporting. Each entry records application
+  site, default, unit, description, and implementation status
+  (implemented / off by default / prepared for future / internal).
+  Flags call-site inconsistencies (burn-multiplier std, `max_initial_age`)
+  and v0.1.0a1 scope exclusions.
+- `design/README.md`: index the new reference document.
+
 ## Unreleased — species-switching replant (feature/species-switching-replant)
 
 Species-switching replant transitions: harvest any species and replant
