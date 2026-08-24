@@ -58,7 +58,6 @@ def _run_pipeline(grid_dir: Path | None = None) -> None:
     from fresh_fuchs.instance.synthetic import build_synthetic_areas, build_synthetic_yields
     from fresh_fuchs.instance.woodstock import write_woodstock_files
     from fresh_fuchs.outer.grid import (
-        CompositionGridAxis,
         PolicyGrid,
         write_grid_record,
     )
@@ -76,7 +75,6 @@ def _run_pipeline(grid_dir: Path | None = None) -> None:
 
     AU1, AU2 = 1, 2
     ZONE_BY_AU = {AU1: "SBPS", AU2: "IDF"}
-    REPLANT_ACTIONS = ("harvest_SX", "harvest_FD")
     species_map = {
         ("29", "managed", "1", "natural", "baseline"): SpeciesClass.LODGEPOLE_PINE,
         ("29", "managed", "1", "planted", "baseline"): SpeciesClass.LODGEPOLE_PINE,
@@ -88,7 +86,7 @@ def _run_pipeline(grid_dir: Path | None = None) -> None:
         config = InstanceConfig(
             model_name="replant-report",
             model_path=Path(tmp),
-            horizon=3,
+            horizon=10,
             period_length=10,
             max_age=300,
             min_harvest_age=60,
@@ -119,7 +117,7 @@ def _run_pipeline(grid_dir: Path | None = None) -> None:
             }
         )
         gen_params = ScenarioGenerationParams(
-            n_scenarios=5,
+            n_scenarios=10,
             master_seed=42,
             horizon=config.horizon,
             period_length=config.period_length,
@@ -131,16 +129,20 @@ def _run_pipeline(grid_dir: Path | None = None) -> None:
         )
         scenarios = generate_scenarios(gen_params)
 
+        # OTHER gets 20% of the share assigned to spruce
+        sx_values = (0.40, 0.60, 0.80)
+        other_ratio = 0.20
+        composition_pts = []
+        for sx_share in sx_values:
+            other_share = round(sx_share * other_ratio, 4)
+            # Mixed: SX reduced by OTHER share, OTHER added
+            pt = {"SX": round(sx_share - other_share, 4), "OT": round(other_share, 4)}
+            composition_pts.append(pt)
+
         grid = PolicyGrid(
             name="replant-grid",
-            composition_axes=(
-                CompositionGridAxis(
-                    species=SpeciesClass.SPRUCE,
-                    values=(0.40, 0.60, 0.80),
-                    tolerance=0.05,
-                    provenance=P,
-                ),
-            ),
+            composition_points=tuple(composition_pts),
+            composition_tolerance=0.05,
             include_unconstrained=True,
             provenance=P,
         )
@@ -148,8 +150,21 @@ def _run_pipeline(grid_dir: Path | None = None) -> None:
         # Expand policies and patch replant_actions (grid.expand doesn't set it)
         from fresh_fuchs.scenario.pipeline import run_scenario_pipeline
 
+        def _replant_actions_for_policy(pol):
+            """Derive replant_actions from composition targets."""
+            if not pol.composition_targets:
+                return None  # unconstrained: source species binding
+            species_codes = {ct.species.value for ct in pol.composition_targets}
+            # Map species code to action code
+            action_map = {"SX": "harvest_SX", "PL": "harvest_PL",
+                          "FD": "harvest_FD", "OT": "harvest_OT"}
+            return tuple(sorted(action_map[sp] for sp in species_codes
+                                if sp in action_map))
+
         policies = [
-            pol.model_copy(update={"replant_actions": REPLANT_ACTIONS})
+            pol.model_copy(update={
+                "replant_actions": _replant_actions_for_policy(pol),
+            })
             for pol in grid.expand()
         ]
 

@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+plt.rcParams["figure.dpi"] = 100
+
 GRID_DIR = Path(os.environ.get("FUCHS_GRID_DIR", "tmp/grid/"))
 POLICY_NAME = os.environ.get("FUCHS_POLICY", None)
 
@@ -48,7 +50,8 @@ for sf in schedule_files:
 
 n_scenarios = len(schedules)
 all_periods = sorted(schedules[0]["period"].unique())
-print(f"Loaded {n_scenarios} scenario schedules for '{POLICY_NAME}'")
+n_periods = len(all_periods)
+print(f"Loaded {n_scenarios} scenario schedules, {n_periods} periods for '{POLICY_NAME}'")
 
 composition_targets = {}
 grid_json_path = GRID_DIR / "grid_summary.json"
@@ -67,13 +70,20 @@ if composition_targets:
     print(f"Composition targets: {composition_targets}")
 else:
     print("No composition targets for this policy")
+
+
+def _fmt(val, decimals=0):
+    """Format number: no decimals for values >= 100."""
+    if abs(val) >= 100:
+        return f"{val:,.0f}"
+    return f"{val:,.{decimals}f}"
 ```
 
 ## Per-Period Results
 
 ```{python}
 #| label: period-results-table
-#| tbl-cap: "Mean per-period results across scenarios (rounded)"
+#| tbl-cap: "Mean per-period results across scenarios"
 
 rows = []
 for t in all_periods:
@@ -103,12 +113,20 @@ for t in all_periods:
     rows.append(vals)
 
 results_df = pd.DataFrame(rows).set_index("period")
-results_df.style.format("{:,.1f}")
+results_df.style.format({
+    "harvest_area_ha": _fmt,
+    "harvest_volume_m3": _fmt,
+    "growing_stock_m3": _fmt,
+    "salvage_area_ha": _fmt,
+    "salvage_volume_m3": _fmt,
+})
 ```
 
 ```{python}
 #| label: harvest-volume-bar
 #| fig-cap: "Mean harvest volume per period (error bars = min/max across scenarios)"
+#| fig-width: 8
+#| fig-height: 4
 
 means = [
     np.mean([s.loc[s["period"] == t, "harvest_volume_m3"].values[0]
@@ -126,8 +144,9 @@ maxs = [
     for t in all_periods
 ]
 
-fig, ax = plt.subplots()
-ax.bar(all_periods, means, color="#4C72B0", alpha=0.8, label="Mean")
+fig, ax = plt.subplots(figsize=(max(6, n_periods * 0.9), 4))
+bar_width = max(0.4, min(0.8, 8.0 / n_periods))
+ax.bar(all_periods, means, width=bar_width, color="#4C72B0", alpha=0.8, label="Mean")
 ax.errorbar(
     all_periods, means,
     yerr=[np.array(means) - np.array(mins), np.array(maxs) - np.array(means)],
@@ -146,6 +165,8 @@ plt.show()
 ```{python}
 #| label: replant-composition-stacked
 #| fig-cap: "Mean replant area by species per period (stacked, shaded = min/max)"
+#| fig-width: 8
+#| fig-height: 4
 
 all_species_keys = set()
 for s in schedules.values():
@@ -161,7 +182,7 @@ if all_species_keys:
     species_order = sorted(all_species_keys)
     colors = {"SX": "#1f77b4", "PL": "#ff7f0e", "FD": "#2ca02c", "OT": "#d62728"}
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(max(6, n_periods * 0.9), 4))
     bottoms_mean = np.zeros(len(all_periods))
 
     for sp in species_order:
@@ -203,6 +224,8 @@ else:
 ```{python}
 #| label: bray-curtis
 #| fig-cap: "Bray-Curtis dissimilarity (0 = matches target, 1 = completely different)"
+#| fig-width: 8
+#| fig-height: 4
 
 def bray_curtis(actual, target):
     all_sp = set(actual.keys()) | set(target.keys())
@@ -233,7 +256,7 @@ if composition_targets:
         bc_mins.append(np.min(bc_per_sc))
         bc_maxs.append(np.max(bc_per_sc))
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(max(6, n_periods * 0.9), 4))
     ax.plot(all_periods, bc_means, "o-", color="#C44E52", label="Mean")
     ax.fill_between(all_periods, bc_mins, bc_maxs, alpha=0.2, color="#C44E52", label="Min-Max")
     ax.set_xlabel("Period")
@@ -252,6 +275,8 @@ else:
 ```{python}
 #| label: harvest-species-line
 #| fig-cap: "Mean harvest volume by species per period (line = mean, shaded = min/max)"
+#| fig-width: 8
+#| fig-height: 4
 
 all_hvol_keys = set()
 for s in schedules.values():
@@ -266,7 +291,7 @@ for s in schedules.values():
 if all_hvol_keys:
     colors = {"SX": "#1f77b4", "PL": "#ff7f0e", "FD": "#2ca02c", "OT": "#d62728"}
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(max(6, n_periods * 0.9), 4))
     for sp in sorted(all_hvol_keys):
         sp_means = []
         sp_mins = []
@@ -301,7 +326,7 @@ else:
 
 ```{python}
 #| label: salvage-table
-#| tbl-cap: "Mean salvage results across scenarios (rounded)"
+#| tbl-cap: "Mean salvage results across scenarios"
 
 salvage_rows = []
 for t in all_periods:
@@ -321,12 +346,19 @@ for t in all_periods:
         ]), 0),
     })
 
-pd.DataFrame(salvage_rows).set_index("period")
+salvage_df = pd.DataFrame(salvage_rows).set_index("period")
+salvage_df.style.format({
+    "salvage_area_ha": _fmt,
+    "salvage_volume_m3": _fmt,
+    "salvageable_volume_m3": _fmt,
+})
 ```
 
 ```{python}
 #| label: salvage-bar
 #| fig-cap: "Mean salvage volume per period (error bars = min/max)"
+#| fig-width: 8
+#| fig-height: 4
 
 s_means = [
     np.mean([s.loc[s["period"] == t, "salvage_volume_m3"].values[0]
@@ -344,8 +376,9 @@ s_maxs = [
     for t in all_periods
 ]
 
-fig, ax = plt.subplots()
-ax.bar(all_periods, s_means, color="#DD8452", alpha=0.8, label="Mean")
+fig, ax = plt.subplots(figsize=(max(6, n_periods * 0.9), 4))
+bar_width = max(0.4, min(0.8, 8.0 / n_periods))
+ax.bar(all_periods, s_means, width=bar_width, color="#DD8452", alpha=0.8, label="Mean")
 ax.errorbar(
     all_periods, s_means,
     yerr=[np.array(s_means) - np.array(s_mins), np.array(s_maxs) - np.array(s_means)],
@@ -365,20 +398,31 @@ plt.show()
 #| label: policy-summary-table
 #| tbl-cap: "Grid summary across all policies"
 
-grid_df[["policy", "status", "mean_npv", "min_npv", "max_npv", "mean_annual_harvest_m3_per_yr"]]
+fmt_cols = {}
+for c in grid_df.columns:
+    if c in ("policy", "status"):
+        continue
+    if grid_df[c].dtype in ("float64", "float32"):
+        fmt_cols[c] = _fmt
+grid_df.style.format(fmt_cols)
 ```
 
 ```{python}
 #| label: npv-comparison-bar
 #| fig-cap: "Mean NPV per policy (error bars = min/max across scenarios)"
+#| fig-width: 8
+#| fig-height: 5
 
 policies = grid_df["policy"].tolist()
 npv_means = grid_df["mean_npv"].tolist()
 npv_mins = grid_df["min_npv"].tolist()
 npv_maxs = grid_df["max_npv"].tolist()
 
-fig, ax = plt.subplots()
-bars = ax.barh(policies, npv_means, color="#4C72B0", alpha=0.8)
+# Highlight the selected policy
+bar_colors = ["#4C72B0" if p == POLICY_NAME else "#999999" for p in policies]
+
+fig, ax = plt.subplots(figsize=(8, max(3, len(policies) * 1.0)))
+bars = ax.barh(policies, npv_means, color=bar_colors, alpha=0.8, height=0.6)
 ax.errorbar(
     npv_means, policies,
     xerr=[np.array(npv_means) - np.array(npv_mins), np.array(npv_maxs) - np.array(npv_means)],
@@ -386,6 +430,7 @@ ax.errorbar(
 )
 ax.set_xlabel("NPV (CAD)")
 ax.set_title("NPV Comparison Across Policies")
+ax.set_xlim(left=max(0, min(npv_mins) * 0.9))
 plt.tight_layout()
 plt.show()
 ```
@@ -405,9 +450,9 @@ mean_annual = total_harvest / (len(all_periods) * 10)
 
 print(f"Policy:              {POLICY_NAME}")
 print(f"Scenarios:           {n_scenarios}")
-print(f"Mean NPV:            ${policy_row['mean_npv']:,.0f}")
-print(f"NPV range:           ${policy_row['min_npv']:,.0f} -- ${policy_row['max_npv']:,.0f}")
-print(f"Total harvest:       {total_harvest:,.0f} m3")
-print(f"Total area:          {total_area:,.1f} ha")
-print(f"Mean annual harvest: {mean_annual:,.0f} m3/yr")
+print(f"Mean NPV:            ${_fmt(policy_row['mean_npv'])}")
+print(f"NPV range:           ${_fmt(policy_row['min_npv'])} -- ${_fmt(policy_row['max_npv'])}")
+print(f"Total harvest:       {_fmt(total_harvest)} m3")
+print(f"Total area:          {_fmt(total_area, 1)} ha")
+print(f"Mean annual harvest: {_fmt(mean_annual)} m3/yr")
 ```
