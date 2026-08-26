@@ -21,6 +21,11 @@ its path (P3.1 dynamics). Concretely, for a scenario:
   age floor excludes salvage of regenerating stands and, together with the
   per-period operability pruning, bounds Model I tree growth (a salvaged
   cohort only reopens the salvage branch once back above the threshold).
+  Species-switching salvage replant actions (``salvage_SX``, ``salvage_PL``,
+  ...; P6.5) behave identically for fire dynamics and salvage economics and
+  additionally carry the target species' replant cost (when
+  ``surface.charge_replant_in_npv`` is set), transitioning the stand to the
+  replant development type instead of the source AU.
 - **Salvage feasibility row.** A general row ``salvage_vol(t) -
   salvageable_vol(t) <= 0`` makes the "salvage <= burned stock" ceiling an
   explicit LP row. Because a Model I path's salvage volume *is* its computed
@@ -287,7 +292,10 @@ def apply_salvage_operability(
     with zero burn probability for that type's zone so the tree does not
     branch into (zero-volume) salvage decisions in fire-free periods. The
     age window (``min_salvage_age`` .. ``max_age``) comes from the
-    ``oper_expr`` set by :func:`add_salvage_action`.
+    ``oper_expr`` set by :func:`add_salvage_action`. All registered
+    ``salvage*`` actions (base ``salvage`` plus any salvage replant actions
+    from :func:`fresh_fuchs.instance.replant.add_replant_salvage_actions`)
+    are pruned identically.
 
     Closed periods are recorded as an empty age window ``(0, -1)`` rather
     than ``None``: PyPI ws3 1.0.5's ``is_operable``/``operable_ages`` cannot
@@ -295,6 +303,7 @@ def apply_salvage_operability(
     handle a window with ``lo > hi`` as closed.
     """
     lookup = build_burn_prob_lookup(scenario, model.period_length)
+    salvage_codes = tuple(sorted(a for a in model.actions if a.startswith("salvage")))
     for dtk, dt in model.dtypes.items():
         au_raw = dtk[2]
         au_id_str = au_raw.split("-")[0] if "-" in au_raw else au_raw
@@ -305,10 +314,11 @@ def apply_salvage_operability(
         if au_id not in zone_by_au:
             raise ValueError(f"development type {dtk} has no BEC zone for au_id {au_id}")
         zone = zone_by_au[au_id].upper()
-        dt.compile_action("salvage")
-        for period in model.periods:
-            if lookup.get((zone, period), 0.0) == 0.0:
-                dt.operability["salvage"][period] = (0, -1)
+        for acode in salvage_codes:
+            dt.compile_action(acode)
+            for period in model.periods:
+                if lookup.get((zone, period), 0.0) == 0.0:
+                    dt.operability[acode][period] = (0, -1)
     return model
 
 
@@ -342,6 +352,12 @@ def _compile_path_z(
             group = price_group_for_species(species)
             margin = sawlog_basis_salvage_margin(surface, group)
             flow = step.salvaged * margin
+            # Salvage replant (salvage_SX etc.): the salvaged stand is
+            # replanted with the target species, so charge its replant cost
+            # (same per-cohort-area convention as the harvest branch).
+            target_sp = target_species_from_acode(step.acode)
+            if target_sp is not None and surface.charge_replant_in_npv:
+                flow -= surface.replant_cost_per_ha(target_sp)
         else:
             continue
         discount = surface.discount_factor(step.period, period_length=fm.period_length)
@@ -489,7 +505,7 @@ def add_fire_problem(
         )
     }
     cgen_data: dict[str, dict[str, Any]] | None = None
-    if "salvage" in config.action_codes:
+    if any(code.startswith("salvage") for code in config.action_codes):
         cgen_data = {
             "salvage_feas": {
                 "lb": None,
@@ -580,6 +596,11 @@ def solve_fire_lp(
 
     ``species_by_dtk``: development-type-key → species class mapping used
     to attribute base ``harvest`` action area/volume to species.
+
+    Salvage replant actions (``salvage_SX``, ...) contribute their salvaged
+    volume/area to the salvage columns (via leaf accounting, like base
+    ``salvage``) and their area to ``replant_area_by_species`` under the
+    target species — that is the area the policy replanted via salvage.
     """
     problem.solve(verbose=False)
     schedule = model.compile_schedule(problem)
@@ -616,7 +637,6 @@ def solve_fire_lp(
     ha_by_sp: dict[int, dict[str, float]] = {p: {} for p in model.periods}
     vol_by_sp: dict[int, dict[str, float]] = {p: {} for p in model.periods}
     replant_by_sp: dict[int, dict[str, float]] = {p: {} for p in model.periods}
-    from fresh_fuchs.instance.replant import target_species_from_acode
 
     for dtk, _age, area, acode, period, _etype in schedule:
         if acode == "harvest":
@@ -630,6 +650,14 @@ def solve_fire_lp(
             sp_cls = target_species_from_acode(acode)
             sp_key = sp_cls.value if sp_cls is not None else "OT"
             is_replant = True
+        elif acode.startswith("salvage_"):
+            # Salvage replant: salvage volume/area are already accounted in
+            # the salvage columns via leaf accounting; here we only record
+            # the replanted area under the target species.
+            sp_cls = target_species_from_acode(acode)
+            sp_key = sp_cls.value if sp_cls is not None else "OT"
+            replant_by_sp[period][sp_key] = replant_by_sp[period].get(sp_key, 0.0) + area
+            continue
         else:
             continue
         vol = model.compile_product(period, "totvol", acode=acode)

@@ -243,11 +243,9 @@ def _precreate_replant_dtypes(
                 # Copy transitions: for replant actions, set self-loop;
                 # for base actions, replicate from source DTK if available.
                 if (acode, -1) not in dt.transitions:
-                    if acode in all_acodes:
+                    sp = target_species_from_acode(acode)
+                    if acode in all_acodes and sp is not None:
                         # Replant action: target is the species of THIS action
-                        sp = target_species[
-                            all_acodes.index(acode)
-                        ]
                         target_au = replant_au_id(replant_key[2], sp)
                         target_mask = tuple(
                             "?" if i != 2 else target_au for i in range(n)
@@ -281,6 +279,11 @@ def add_replant_salvage_actions(
       replant AU at age 0
 
     The base ``salvage`` action is **not** modified.
+
+    Like :func:`add_replant_actions`, newly registered salvage replant
+    targets are pre-created in ``model.dtypes`` (curves copied from the
+    source DTK) so the tree builder can follow salvage replant
+    transitions even when no harvest replant action was registered.
     """
     wildcard_mask = tuple("?" for _ in range(model.nthemes()))
     if min_salvage_age is not None and max_salvage_age is not None:
@@ -291,6 +294,8 @@ def add_replant_salvage_actions(
             raise ValueError(
                 "base 'salvage' action not found; cannot derive operability"
             )
+
+    all_acodes: list[str] = []
 
     for species in target_species:
         acode = f"salvage_{species.value}"
@@ -312,5 +317,10 @@ def add_replant_salvage_actions(
 
         for period in model.applied_actions:
             model.applied_actions[period][acode] = {}
+
+        all_acodes.append(acode)
+
+    if all_acodes:
+        _precreate_replant_dtypes(model, target_species, all_acodes, oper_expr)
 
     return model

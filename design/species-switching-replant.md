@@ -535,26 +535,73 @@ produce a parameterized Quarto report for result visualization.
 
 ### Phase 5: Salvage Replant Integration (P6.5, issue #47)
 
+**Status**: complete.
+
 **Goal**: Salvage actions can replant with a different species.
 
 **Tasks**:
 1. Extend `path_fire_steps` to handle salvage replant actions
-   (treat like salvage + species switch)
+   (treat like salvage + species switch) ✅ — no code change needed:
+   the `acode.startswith("salvage")` handling already covers
+   `salvage_*` codes (pool salvage + survival reset); the species
+   switch itself rides on the ws3 transition registered in Phase 2.
+   Locked in with path-level tests.
 2. Extend `compile_path_z` to apply burned-price discount +
-   replant cost for salvage replant actions
-3. Wire salvage replant actions into `FireLpConfig`
-4. Tests:
-   - Salvage with species switch solves correctly
-   - Burned price discount + replant cost applied
+   replant cost for salvage replant actions ✅ — the salvage branch
+   already applies the burned-price margin to any `salvage_*` code;
+   added the target-species replant cost deduction (per cohort area,
+   same convention as the harvest branch) when
+   `surface.charge_replant_in_npv` is set. Base `salvage` carries no
+   replant cost (unchanged).
+3. Wire salvage replant actions into `FireLpConfig` ✅ —
+   `apply_salvage_operability` now prunes every registered `salvage*`
+   action (autodetected from `model.actions`), so salvage replant
+   branches close in fire-free periods like base salvage;
+   `add_fire_problem` adds the `salvage_feas` row when any
+   `salvage*` code is in `action_codes` (previously only on base
+   `salvage`); `solve_fire_lp` attributes `salvage_*` schedule area
+   to `replant_area_by_species` under the target species.
+4. Tests ✅ — `tests/test_replant_salvage.py` (13 tests):
+   registration standalone (no harvest replant needed), transition
+   targets, path fire steps (pool, survival reset, DTK switch),
+   path-level economics (burned margin identity, replant-cost delta
+   = discounted target cost, base-salvage invariance), operability
+   pruning, LP solves with subsidy (salvage used, feasibility holds,
+   salvaged area == SX replant area), objective lower with replant
+   cost charged, backward compatibility.
+
+**Implementation notes**:
+
+- `add_replant_salvage_actions` now also pre-creates replant DTKs
+  (same `_precreate_replant_dtypes` pass as harvest replant), so
+  salvage replant works standalone — previously a salvage replant
+  transition to a non-existent replant DTK would hit the ws3
+  `_bld_tree_m1` mask-matching failure documented in Phase 2.
+- `_precreate_replant_dtypes` resolves a replant action's target
+  species via `target_species_from_acode` instead of positional
+  parallel-array indexing (robust to partial re-registration now that
+  both harvest and salvage registration call it).
+- **Composition-constraint boundary (recorded semantics)**: outer
+  composition rows bind on `harvest*` steps only
+  (`outer/policy.py::_harvest_steps`); salvage replant area is
+  reported in `replant_area_by_species` but does not count toward
+  composition targets. Salvage is disturbance-driven and, at the
+  default negative salvage margin, rare; if subsidised-salvage
+  policies become a study focus, revisit whether salvaged-and-
+  replanted area should enter the composition shares.
 
 **Verification**:
-- Salvage replant LP solves
-- Correct economics (burned price + replant cost)
-- Salvage feasibility constraint still holds
+- Salvage replant LP solves ✅
+- Correct economics (burned price + replant cost) ✅
+- Salvage feasibility constraint still holds ✅
+- Full suite green: 229 passed, 2 skipped (freshforge-env skips);
+  ruff clean ✅
 
 **Files**:
-- Modified: `src/fresh_fuchs/scenario/fire_lp.py`
-- New: `tests/test_replant_salvage.py`
+- Modified: `src/fresh_fuchs/scenario/fire_lp.py` ✅
+- Modified: `src/fresh_fuchs/instance/replant.py` (salvage DTK
+  pre-creation + robust species resolution)
+- New: `tests/test_replant_salvage.py` ✅
 
 ### Phase 6: CLI + Example Configs (P6.8, issue #50)
 
@@ -650,9 +697,9 @@ produce a parameterized Quarto report for result visualization.
 | File | Current Role | Status |
 |------|-------------|--------|
 | `instance/woodstock.py` | Bootstrap, transition registration | ✅ Wired replant actions via `replant_species` param |
-| `instance/replant.py` | Replant action registration, DTK pre-creation, `target_species_from_acode` | ✅ Phase 2+3 complete (pre-creation fix applied) |
+| `instance/replant.py` | Replant action registration, DTK pre-creation, `target_species_from_acode` | ✅ Phase 2+3+5 complete (pre-creation fix applied; salvage replant also pre-creates DTKs) |
 | `instance/yields_multi.py` | Multi-species yield curves (Chapman-Richards) | ✅ Phase 1 complete |
-| `scenario/fire_lp.py` | Fire LP, salvage, path stepping, per-species extraction, replant DTK operability | ✅ Phase 3+4b complete (operability fix applied) |
+| `scenario/fire_lp.py` | Fire LP, salvage, path stepping, per-species extraction, replant DTK operability, salvage replant economics | ✅ Phase 3+4b+5 complete (operability fix applied) |
 | `scenario/pipeline.py` | Scenario→LP pipeline, replant wiring, species-specific records | ✅ Phase 4b complete |
 | `outer/policy.py` | Composition + harvest LP rows, three-phase transition | ✅ Phase 4 complete |
 | `outer/records.py` | PolicyRecord (`replant_actions`), CompositionTarget (three-phase) | ✅ Phase 4 complete |

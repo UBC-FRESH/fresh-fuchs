@@ -2,6 +2,34 @@
 
 Append-only project narrative, reverse-chronological.
 
+## Unreleased — P6.5 salvage replant integration (species-switching-replant)
+
+Salvage actions can replant with a different species (issue #47).
+
+- `scenario/fire_lp.py`: salvage replant actions (`salvage_SX`, …) carry
+  the P2.4 burned-price margin on the salvaged pool (already, via the
+  `salvage*` prefix) plus, new, the target-species replant cost in
+  `_compile_path_z` when `charge_replant_in_npv` is set (base `salvage`
+  unchanged); `apply_salvage_operability` prunes all registered
+  `salvage*` actions in fire-free periods (autodetected from
+  `model.actions`); `add_fire_problem` adds the `salvage_feas` row when
+  any `salvage*` code is in `action_codes`; `solve_fire_lp` attributes
+  `salvage_*` schedule area to `replant_area_by_species` under the
+  target species.
+- `instance/replant.py`: `add_replant_salvage_actions` now pre-creates
+  replant DTKs (standalone salvage replant no longer crashes the ws3
+  tree builder); `_precreate_replant_dtypes` resolves replant target
+  species via `target_species_from_acode` instead of positional
+  parallel-array indexing.
+- `tests/test_replant_salvage.py` (13 tests): registration, transition
+  targets, path fire dynamics, path-level economics, operability
+  pruning, subsidised LP solves, replant-cost objective delta, backward
+  compatibility.
+- Recorded semantics: outer composition rows bind on `harvest*` steps
+  only; salvage replant area is reported but does not count toward
+  composition targets (see design doc Phase 5).
+- Gate: 229 passed, 2 skipped (freshforge env); ruff clean.
+
 ## Unreleased — P6 issue tracking + TIPSY curve plan (species-switching-replant)
 
 - Issue tracker wired up for the species-switching replant phase:
