@@ -1,6 +1,12 @@
 # Species-Switching Replant Transitions
 
-Status: **Design**
+Status: **In Progress** — roadmap phase P6, parent issue
+[#42](https://github.com/UBC-FRESH/fresh-fuchs/issues/42), branch
+`feature/species-switching-replant`. Design Phases 1–4b complete
+(P6.1–P6.4, #43–#46, tracked retroactively); salvage integration (P6.5,
+#47), TIPSY curve generation (P6.6, #48), bundle integration +
+real-data validation (P6.7, #49), CLI + examples (P6.8, #50), and
+acceptance (P6.9, #51) open.
 
 ## Motivation
 
@@ -527,7 +533,7 @@ produce a parameterized Quarto report for result visualization.
 - New: `scripts/render_report.py`
 - Modified: `pyproject.toml` (`reports = ["matplotlib"]`)
 
-### Phase 5: Salvage Replant Integration
+### Phase 5: Salvage Replant Integration (P6.5, issue #47)
 
 **Goal**: Salvage actions can replant with a different species.
 
@@ -550,7 +556,7 @@ produce a parameterized Quarto report for result visualization.
 - Modified: `src/fresh_fuchs/scenario/fire_lp.py`
 - New: `tests/test_replant_salvage.py`
 
-### Phase 6: CLI + Example Configs
+### Phase 6: CLI + Example Configs (P6.8, issue #50)
 
 **Goal**: End-to-end usability from CLI and example configs.
 
@@ -578,9 +584,11 @@ produce a parameterized Quarto report for result visualization.
 ## Open Questions
 
 1. **Yield curve source**: The femic bundle framework supports species
-   proportion curves but the tsa29mini bundle doesn't populate them yet.
-   The ``si_level`` (L/M/H) column exists as a grouping variable for
-   site-index transfer. Synthetic curves are the current default path.
+   proportion curves but the tsa29mini bundle doesn't populate them yet
+   (bundle confirmed locally available; curve tables carry treated /
+   untreated aggregates only). The ``si_level`` (L/M/H) column exists as
+   a grouping variable for site-index transfer. Synthetic curves are the
+   current default path until P6.6/P6.7 land real TIPSY-derived curves.
    See ``design/yield-curve-framework.md`` and
    ``src/fresh_fuchs/instance/yields_multi.py``.
 
@@ -624,10 +632,18 @@ produce a parameterized Quarto report for result visualization.
    this. When the ws3 fix lands, the tests should be expanded to all 4
    species.
 
-2. **Bundle data not locally available**: the femic tsa29mini bundle
-   is not installed on this machine. All tests use synthetic yield
-   curves. Bundle integration should be verified once the annex data
-   is accessible.
+2. **Bundle lacks species-proportion curves**: the femic tsa29mini
+   bundle is available locally
+   (`femic/external/femic-tsa29mini-instance`, submodule @ `28262a9`)
+   but ships only treated/untreated aggregate curves (108 curves) — no
+   species-proportion curves, and no curves for replanting a site with
+   a different species or species mix than its source stratum. All
+   fresh-fuchs tests therefore use synthetic yield curves. Real curves
+   for the new species/species-mix plantation options will be generated
+   by running TIPSY (BatchTIPSY/BTC) under Wine + Xvfb (lane verified
+   on this host, davis p112 evidence 2026-08-09) — see child issues
+   P6.6 (#48, curve generation) and P6.7 (#49, bundle integration +
+   real-data validation).
 
 ## Key Files Reference
 

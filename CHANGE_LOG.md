@@ -2,6 +2,28 @@
 
 Append-only project narrative, reverse-chronological.
 
+## Unreleased — P6 issue tracking + TIPSY curve plan (species-switching-replant)
+
+- Issue tracker wired up for the species-switching replant phase:
+  parent issue #42 (Phase 6, branch `feature/species-switching-replant`)
+  with children #43–#51 (P6.1–P6.9). Design phases 1–4b were already
+  complete on the branch, so P6.1–P6.4 (#43–#46) were created and closed
+  retroactively with closeout comments referencing the implementing
+  commits. Open: P6.5 #47 (salvage replant integration), P6.6 #48
+  (TIPSY/BTC species-mix plantation yield curves for tsa29mini),
+  P6.7 #49 (bundle species-curve integration + real-data validation),
+  P6.8 #50 (CLI + example configs), P6.9 #51 (acceptance).
+- `ROADMAP.md`: P6 row added to the issue tracker map.
+- `design/species-switching-replant.md`: status moved to In Progress
+  with issue cross-references; stale "bundle data not locally
+  available" limitation corrected — the tsa29mini bundle is present at
+  `femic/external/femic-tsa29mini-instance` (submodule @ `28262a9`) but
+  ships no species-proportion curves (108 treated/untreated curves
+  only); real curves for the new species/species-mix plantation options
+  will come from TIPSY (BTC) runs under Wine + Xvfb (lane verified on
+  this host, davis p112 evidence 2026-08-09) via P6.6/P6.7.
+- `design/README.md`: species-switching-replant status updated.
+
 ## Unreleased — fire regime design note (documentation)
 
 - `design/fire-regime.md`: design note on the wildfire regime — real-world
