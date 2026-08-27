@@ -4,9 +4,9 @@ Status: **In Progress** — roadmap phase P6, parent issue
 [#42](https://github.com/UBC-FRESH/fresh-fuchs/issues/42), branch
 `feature/species-switching-replant`. Design Phases 1–4b complete
 (P6.1–P6.4, #43–#46, tracked retroactively); salvage integration (P6.5,
-#47), TIPSY curve generation (P6.6, #48), bundle integration +
-real-data validation (P6.7, #49), CLI + examples (P6.8, #50), and
-acceptance (P6.9, #51) open.
+#47), TIPSY curve generation (P6.6, #48), and real-curve integration +
+real-instance validation (P6.7, #49) closed; CLI + examples (P6.8, #50)
+and acceptance (P6.9, #51) open.
 
 ## Motivation
 
@@ -700,7 +700,7 @@ produce a parameterized Quarto report for result visualization.
 |------|-------------|--------|
 | `instance/woodstock.py` | Bootstrap, transition registration | ✅ Wired replant actions via `replant_species` param |
 | `instance/replant.py` | Replant action registration, DTK pre-creation, `target_species_from_acode` | ✅ Phase 2+3+5 complete (pre-creation fix applied; salvage replant also pre-creates DTKs) |
-| `instance/yields_multi.py` | Multi-species yield curves (Chapman-Richards) | ✅ Phase 1 complete |
+| `instance/yields_multi.py` | Multi-species yield curves; BTC replant store loader + resolution order (real > synthetic) | ✅ Phase 1 + P6.7 complete |
 | `scenario/fire_lp.py` | Fire LP, salvage, path stepping, per-species extraction, replant DTK operability, salvage replant economics | ✅ Phase 3+4b+5 complete (operability fix applied) |
 | `scenario/pipeline.py` | Scenario→LP pipeline, replant wiring, species-specific records | ✅ Phase 4b complete |
 | `outer/policy.py` | Composition + harvest LP rows, three-phase transition | ✅ Phase 4 complete |

@@ -2,6 +2,33 @@
 
 Append-only project narrative, reverse-chronological.
 
+## Unreleased — P6.7 real-curve integration + real-instance validation (species-switching-replant)
+
+- `instance/yields_multi.py`: `load_replant_curves_from_btc()` loads the
+  P6.6 BTC replant curve store (curves + manifest →
+  `MultiSpeciesYieldTable` keyed by `(au_id, SpeciesClass)`; SW maps to
+  SPRUCE); `build_multi_species_yields()` gains a `replant_curves`
+  overlay — real TIPSY curves win, synthetic fills the rest with a
+  `UserWarning` diagnostic naming uncovered combinations.
+- `instance/replant.py`: `_precreate_replant_dtypes` prefers the ws3
+  `model.yields` stash (curves written into the Woodstock `.yld` for the
+  replant AU) over the source-DTK placeholder copy; mask matching is
+  case-insensitive (ws3 lowercases mask entries on import).
+- `instance/__init__.py`: `build_model()` accepts `replant_species` +
+  `replant_yields`, writing replant-AU curves into the Woodstock
+  sections.
+- `tests/test_replant_curves_btc.py` (9 tests): loader (keys, clipping,
+  error paths), resolution order (real wins, synthetic warns, target
+  filter), DTK wiring (real curve from stash; fallback copy without
+  stash).
+- End-to-end real-instance validation (tsa29mini bundle, h=10, 2
+  fixed-seed fire scenarios, composition policy 40% SX ± 0.10 with
+  3 free + 5 ramp periods): both scenarios optimal; replant DTKs carry
+  the real BTC curves (within ws3 curve-simplification tolerance); SX
+  replant share respects the band in binding periods.
+  Evidence: `planning/replant-real-curve-validation.md`.
+- Gate: 238 passed, 2 skipped (freshforge env); ruff clean.
+
 ## Unreleased — P6.6 TIPSY (BTC) replant curves generated (species-switching-replant)
 
 Real plantation yield curves for the species-switching replant options

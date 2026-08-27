@@ -11,6 +11,8 @@ Reference implementation: the tsa29mini demo notebook and
 
 from __future__ import annotations
 
+from typing import Any
+
 import ws3.forest
 
 from .baseline import (
@@ -81,11 +83,24 @@ __all__ = [
 ]
 
 
-def build_model(config: InstanceConfig) -> tuple[ws3.forest.ForestModel, dict[str, object]]:
+def build_model(
+    config: InstanceConfig,
+    *,
+    replant_species: tuple[SpeciesClass, ...] | None = None,
+    replant_yields: Any = None,
+) -> tuple[ws3.forest.ForestModel, dict[str, object]]:
     """Build the ws3 ``ForestModel`` from a real bundle end-to-end.
 
     Requires ``config.fragments_path``. Returns the bootstrapped model and a
     provenance/summary dictionary (table row counts, managed land base).
+
+    When ``replant_species`` and ``replant_yields`` (a
+    ``MultiSpeciesYieldTable`` — e.g. the real BTC replant store from
+    ``yields_multi.load_replant_curves_from_btc``) are provided, replant AU
+    codes and their target-species yield curves are written into the
+    Woodstock sections, so ``prepare_optimization`` /
+    ``add_replant_actions`` pre-created replant DTKs pick up the real
+    curves from the yields stash.
     """
     if config.fragments_path is None or config.bundle_dir is None:
         raise ValueError(
@@ -103,7 +118,13 @@ def build_model(config: InstanceConfig) -> tuple[ws3.forest.ForestModel, dict[st
         species_by_au=species_by_au,
     )
 
-    written = write_woodstock_files(areas=areas, yields=tables["yields"], config=config)
+    written = write_woodstock_files(
+        areas=areas,
+        yields=tables["yields"],
+        config=config,
+        replant_yields=replant_yields,
+        replant_species=replant_species,
+    )
     model = bootstrap_model(config)
 
     composition = managed_landscape_composition(areas)

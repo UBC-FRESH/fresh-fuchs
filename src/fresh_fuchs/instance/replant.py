@@ -10,6 +10,8 @@ Design: ``design/species-switching-replant.md`` (Option C).
 
 from __future__ import annotations
 
+from typing import Any
+
 import ws3.forest
 
 from .species import SpeciesClass
@@ -188,6 +190,30 @@ def add_replant_actions(
     return model
 
 
+def _yields_stash_ycomps(
+    model: ws3.forest.ForestModel, key: tuple[str, ...]
+) -> list[tuple[str, Any]]:
+    """Return ``(yname, ycomp)`` pairs stashed in ``model.yields`` for *key*.
+
+    ws3's ``import_yields_section`` stashes ``(mask, t, ycomps)`` for DTKs
+    that do not exist yet at bootstrap (our replant AUs have curves but no
+    area records). Only simple literal/wildcard masks are matched (the
+    replant curves are written with ``*Y ? managed <rau> ? ?`` masks).
+    ws3 lowercases mask entries on import, so comparison is
+    case-insensitive.
+    """
+    found: list[tuple[str, Any]] = []
+    for mask, t, ycomps in getattr(model, "yields", []):
+        if len(mask) != len(key):
+            continue
+        if all(
+            str(m).lower() == "?" or str(m).lower() == str(k).lower()
+            for m, k in zip(mask, key, strict=True)
+        ):
+            found.extend(ycomps)
+    return found
+
+
 def _precreate_replant_dtypes(
     model: ws3.forest.ForestModel,
     target_species: tuple[SpeciesClass, ...],
@@ -204,7 +230,10 @@ def _precreate_replant_dtypes(
     For each original DTK and each target species, the corresponding
     replant DTK is created (if not already present) with:
 
-    - Yield curves copied from the source AU's DTK
+    - Yield curves from the ``model.yields`` stash when the Woodstock
+      ``.yld`` section carried curves for this replant AU (the real
+      target-species curves, e.g. BTC replant store); otherwise curves
+      copied from the source AU's DTK (backward-compatible placeholder)
     - Operability and transitions for ALL registered actions
       (copied from existing DTKs via model-level oper_expr)
     - Zero initial area
@@ -225,10 +254,16 @@ def _precreate_replant_dtypes(
                 dt = ws3.forest.DevelopmentType(replant_key, model)
                 model.dtypes[replant_key] = dt
 
-                # Copy yield curves from source DTK
-                for yname in source_dt.ycomps():
-                    ycomp = source_dt.ycomp(yname)
-                    dt.add_ycomp("a", yname, ycomp)
+                # Prefer real replant-AU curves from the yields stash;
+                # fall back to copying the source DTK's curves.
+                stashed = _yields_stash_ycomps(model, replant_key)
+                if stashed:
+                    for yname, ycomp in stashed:
+                        dt.add_ycomp("a", yname, ycomp)
+                else:
+                    for yname in source_dt.ycomps():
+                        ycomp = source_dt.ycomp(yname)
+                        dt.add_ycomp("a", yname, ycomp)
 
             # Wire up ALL model-level actions on this DTK
             for acode in model.actions:
