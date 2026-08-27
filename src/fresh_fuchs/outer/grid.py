@@ -139,6 +139,17 @@ class PolicyGrid(BaseModel):
     )
     harvest_axis: HarvestGridAxis | None = None
     include_unconstrained: bool = False
+    replant_actions: tuple[str, ...] | None = Field(
+        default=None,
+        description=(
+            "Replant action codes (e.g. ('harvest_SX', 'harvest_FD')) "
+            "propagated to every expanded policy — including the "
+            "unconstrained baseline, which then measures the effect of the "
+            "composition constraint given available replant actions. When "
+            "None, policies keep replant_actions=None (backward-compatible "
+            "same-species replanting only)."
+        ),
+    )
     provenance: Provenance
 
     def expand(self) -> tuple[PolicyRecord, ...]:
@@ -159,6 +170,7 @@ class PolicyGrid(BaseModel):
                     name=f"{self.name}_unconstrained",
                     composition_targets=(),
                     harvest_policy=None,
+                    replant_actions=self.replant_actions,
                     provenance=self.provenance,
                 )
             )
@@ -183,6 +195,7 @@ class PolicyGrid(BaseModel):
                         name=_point_name_from_label(self.name, label, self.harvest_axis, level),
                         composition_targets=targets,
                         harvest_policy=harvest_policy,
+                        replant_actions=self.replant_actions,
                         provenance=self.provenance,
                     )
                 )

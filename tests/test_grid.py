@@ -410,3 +410,97 @@ def test_grid_expand_axes_still_works() -> None:
     assert len(points) == 2
     shares = {p.composition_targets[0].target_share for p in points}
     assert shares == {0.8, 0.9}
+
+
+# ---------------------------------------------------------------------------
+# Species-switching replant grids (P6.8)
+# ---------------------------------------------------------------------------
+
+EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
+
+
+def test_grid_expand_propagates_replant_actions() -> None:
+    grid = PolicyGrid(
+        name="replant",
+        composition_points=({"SX": 0.40, "n_free_periods": 3, "n_ramp_periods": 5},),
+        include_unconstrained=True,
+        replant_actions=("harvest_SX", "harvest_FD"),
+        provenance=P,
+    )
+    points = grid.expand()
+    assert len(points) == 2  # unconstrained baseline + 1 point
+    for p in points:
+        assert p.replant_actions == ("harvest_SX", "harvest_FD")
+    assert points[0].name == "replant_unconstrained"
+    assert points[0].composition_targets == ()
+    # The composition point carries the three-phase schedule through.
+    target = points[1].composition_targets[0]
+    assert target.species is SpeciesClass.SPRUCE
+    assert target.target_share == 0.40
+    assert target.n_free_periods == 3
+    assert target.n_ramp_periods == 5
+
+
+def test_grid_expand_replant_actions_default_none() -> None:
+    grid = PolicyGrid(name="plain", composition_points=({"PL": 0.8},), provenance=P)
+    (point,) = grid.expand()
+    assert point.replant_actions is None
+
+
+def test_example_replant_grids_validate_and_expand() -> None:
+    import json
+
+    default = PolicyGrid.model_validate(
+        json.loads((EXAMPLES / "policy-grid.replant-default.json").read_text())
+    )
+    assert default.replant_actions is None
+    assert all(p.replant_actions is None for p in default.expand())
+
+    unconstrained = PolicyGrid.model_validate(
+        json.loads((EXAMPLES / "policy-grid.replant-unconstrained.json").read_text())
+    )
+    points = unconstrained.expand()
+    assert len(points) == 1  # single default point (no axes/points)
+    assert points[0].replant_actions == ("harvest_SX", "harvest_FD")
+    assert points[0].composition_targets == ()
+    assert points[0].harvest_policy is None
+
+    constrained = PolicyGrid.model_validate(
+        json.loads((EXAMPLES / "policy-grid.replant.json").read_text())
+    )
+    points = constrained.expand()
+    assert len(points) == 3  # baseline + 2 composition points
+    assert all(p.replant_actions == ("harvest_SX", "harvest_FD") for p in points)
+    shares = sorted(p.composition_targets[0].target_share for p in points[1:])
+    assert shares == [0.40, 0.60]
+    for p in points[1:]:
+        assert p.composition_targets[0].n_free_periods == 3
+        assert p.composition_targets[0].n_ramp_periods == 5
+
+
+def test_run_grid_with_replant_policy(tmp_path) -> None:
+    """A replant grid runs end-to-end on the synthetic instance and reports
+    per-species replant area in the scenario schedule records."""
+    kw = _run_kw(tmp_path)
+    grid = PolicyGrid(
+        name="replant_run",
+        composition_points=({"SX": 0.50, "tolerance": 0.10},),
+        replant_actions=("harvest_SX", "harvest_FD"),
+        provenance=P,
+    )
+    record = run_grid(grid=grid, **kw)
+    assert record.n_policies == 1
+    result = record.results[0]
+    assert result.status == "ok"
+    assert result.run is not None
+    for scenario in result.run.scenarios:
+        assert scenario.status == "optimal"
+        for period in scenario.periods:
+            assert isinstance(period.replant_area_by_species, dict)
+    # The composition target forces spruce replanting somewhere.
+    total_sx = sum(
+        p.replant_area_by_species.get("SX", 0.0)
+        for s in result.run.scenarios
+        for p in s.periods
+    )
+    assert total_sx > 0

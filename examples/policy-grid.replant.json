@@ -1,0 +1,17 @@
+{
+  "name": "replant_sx_targets",
+  "include_unconstrained": true,
+  "replant_actions": ["harvest_SX", "harvest_FD"],
+  "comment": "Two-species replant (spruce + Douglas-fir) with spruce replant-area composition targets on a three-phase schedule (3 free + 5 ramp periods; tolerance band 0.10 once binding). The unconstrained baseline runs with the same replant actions, isolating the constraint's effect.",
+  "composition_points": [
+    {"SX": 0.40, "tolerance": 0.10, "n_free_periods": 3, "n_ramp_periods": 5},
+    {"SX": 0.60, "tolerance": 0.10, "n_free_periods": 3, "n_ramp_periods": 5}
+  ],
+  "composition_tolerance": 0.10,
+  "provenance": {
+    "source": "example grid",
+    "as_of": "2026-08-27",
+    "units": "policy spec",
+    "basis": "public-safe example: replant composition targets with three-phase schedule"
+  }
+}
