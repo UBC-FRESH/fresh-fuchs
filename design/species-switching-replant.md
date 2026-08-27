@@ -1,12 +1,12 @@
 # Species-Switching Replant Transitions
 
-Status: **In Progress** — roadmap phase P6, parent issue
+Status: **Implemented** — roadmap phase P6, parent issue
 [#42](https://github.com/UBC-FRESH/fresh-fuchs/issues/42), branch
-`feature/species-switching-replant`. Design Phases 1–4b complete
-(P6.1–P6.4, #43–#46, tracked retroactively); salvage integration (P6.5,
-#47), TIPSY curve generation (P6.6, #48), and real-curve integration +
-real-instance validation (P6.7, #49) closed; CLI + examples (P6.8, #50)
-and acceptance (P6.9, #51) open.
+`feature/species-switching-replant`. All design phases complete:
+1–4b (P6.1–P6.4, #43–#46, tracked retroactively), salvage integration
+(P6.5, #47), TIPSY (BTC) curve generation (P6.6, #48), real-curve
+integration + real-instance validation (P6.7, #49), CLI + examples
+(P6.8, #50), acceptance (P6.9, #51).
 
 ## Motivation
 
@@ -628,56 +628,55 @@ produce a parameterized Quarto report for result visualization.
 
 ---
 
-## Open Questions
+## Open Questions (reconciled at P6.9 acceptance)
 
-1. **Yield curve source**: The femic bundle framework supports species
-   proportion curves but the tsa29mini bundle doesn't populate them yet
-   (bundle confirmed locally available; curve tables carry treated /
-   untreated aggregates only). The ``si_level`` (L/M/H) column exists as
-   a grouping variable for site-index transfer. Synthetic curves are the
-   current default path until P6.6/P6.7 land real TIPSY-derived curves.
-   See ``design/yield-curve-framework.md`` and
-   ``src/fresh_fuchs/instance/yields_multi.py``.
+1. **Yield curve source — RESOLVED.** Real TIPSY (BTC) pure-plantation
+   curves for every source AU × PL/SW/FD were generated in P6.6 (instance
+   repo `feature/replant-tipsy-curves` @ `42bc969`) and are wired in
+   (P6.7): `load_replant_curves_from_btc` + the `replant_curves` overlay
+   in `build_multi_species_yields()`; synthetic Chapman–Richards remains
+   the explicit fallback (with a diagnostic). The femic
+   species-proportion-sidecar path stays for per-species attribution of
+   existing stands if femic populates it later. Species mixes and OT have
+   no TIPSY representation yet (mixes deferred; OT falls back to
+   synthetic).
 
-2. **Number of replant species**: All 4 (SX, PL, FD, OT) or a subset?
-   Each additional species multiplies the action count. Recommend
-   starting with 2-3 for testing.
+2. **Number of replant species — RESOLVED.** All 4 (SX, PL, FD, OT) are
+   supported; the action-count limitation was retired (see Known
+   Limitation 1). Action count scales the LP, so policies should still
+   register only policy-relevant species for large horizons.
 
-3. **Replant cost data**: Per-species planting costs need to come from
-   somewhere (economics config, bundle data, or hardcoded defaults).
+3. **Replant cost data — documented defaults.** Flat per-ha costs by
+   species class in `economy/types.py::_default_replant` (PL 2200, SX
+   2400, FD 2600, OT 2200 CAD/ha; flagged assumption, not charged by
+   default since the $45/m3 harvest cost carries silviculture;
+   `charge_replant_in_npv` flips it on). Calibrate against a
+   femic/fhops source before relying on cost-driven species choice.
 
-4. **Theme count**: The 5-theme structure (TSA, IFM, AU, ORIGIN,
-   SILV_STATE) stays. Replant actions target different AUs (which have
-   different yield curves), not different themes. No 6th theme needed.
+4. **Theme count — confirmed.** 5 themes (TSA, IFM, AU, ORIGIN,
+   SILV_STATE); replant targets are AU variants, not new themes.
 
-5. **Performance and action count**: More actions = larger LP. With 4
-   replant species, the action count goes from 3 (null, harvest, salvage)
-   to 7. The Model I tree grows proportionally. Monitor solve times on
-   tsa29mini. **Known limitation**: ws3's `compile_problem` silently
-   drops actions from `model.actions` when the total action count is
-   high (observed at 7 actions on the synthetic 2-AU instance). With 2
-   replant species (SX + FD, 5 total actions) the tree compiles
-   correctly; with 4 (SX + PL + FD + OT, 7 actions) `harvest_SX` is
-   dropped. The cause is inside ws3's `add_problem`/`compile_problem`
-   path (likely the Model I tree builder prunes actions with fewer
-   feasible paths when branching factor is high). Workaround: register
-   only the 2–3 most policy-relevant species as replant targets. A
-   upstream fix in ws3 may be needed for 4-species policies.
+5. **Performance — recorded.** Real instance (tsa29mini, 5 action
+   codes): h=10 ≈ 35 s build+solve per scenario (P6.7 validation);
+   h=30 with replant actions exceeds an hour per scenario (consistent
+   with the P3.4 scaling bounds: h=20 ~377k vars/~6 min at 3 actions,
+   h=24+ tens of minutes). Full-MC catalogue sizing at h=30 with replant
+   actions is a study-design consideration, not a code limitation.
 
 ## Known Limitations
 
-1. **ws3 action-dropping at high action counts** (discovered during
-   Phase 4 testing): when `add_fire_problem` / `model.add_problem` is
-   called with 7+ action codes, ws3's `compile_problem` can silently
-   remove actions from `model.actions` even though they have valid
-   transitions and operability expressions on all DTKs. The surviving
-   actions appear to depend on action ordering in `action_codes` and
-   the internal tree-building heuristics. This is a ws3 bug, not a
-   fresh-fuchs issue. Current workaround: limit replant targets to
-   2–3 species per LP solve. The 4-species test
-   (`test_replant_composition.py`) uses 2 species (SX + FD) to avoid
-   this. When the ws3 fix lands, the tests should be expanded to all 4
-   species.
+1. **~~ws3 action-dropping at high action counts~~ — RESOLVED (P6.9).**
+   The Phase-4 observation (actions silently losing all paths at 7+
+   action codes) was a *fresh-fuchs* bug, not ws3: before the DTK
+   pre-creation fix (P6.2, `a39a2fb`), replant transitions pointed at
+   non-existent DTKs, so the tree builder never branched on those
+   actions. Re-verified on ws3 1.0.5 (PyPI) and 1.1.0a5 (editable):
+   7 action codes (4 replant species) × horizon 10 → every action has
+   live paths (279 each on the synthetic 2-AU instance) and the LP
+   solves optimal. Regression guards:
+   `test_replant_lp.py::test_four_species_all_actions_survive_and_solve`,
+   `test_replant_composition.py::test_four_species_composition_solves`.
+   Four replant species are now the supported configuration.
 
 2. **Bundle lacks species-proportion curves; replant curves now
    generated (P6.6 ✅)**: the femic tsa29mini bundle is available

@@ -292,6 +292,70 @@ def test_replant_composition_binds_spruce_share(tmp_path):
         assert 0.55 <= sx_share <= 0.65, f"spruce share {sx_share:.3f} outside [0.55, 0.65]"
 
 
+def test_four_species_composition_solves(tmp_path):
+    """Four replant species (7 action codes) with a composition target solve.
+
+    Regression guard for the retired "ws3 drops actions at 7+ action counts"
+    limitation (root cause was missing replant-DTK pre-creation, P6.2; verified
+    resolved on ws3 1.0.5 and 1.1.0a5 in P6.9).
+    """
+    config = _context(tmp_path)
+    four_actions = ("harvest_SX", "harvest_PL", "harvest_FD", "harvest_OT")
+    policy = PolicyRecord(
+        name="replant_comp_sx_4sp",
+        provenance=P,
+        composition_targets=(
+            CompositionTarget(
+                species=SpeciesClass.SPRUCE,
+                target_share=0.4,
+                tolerance=0.20,
+                provenance=P,
+            ),
+        ),
+        replant_actions=four_actions,
+    )
+    model = prepare_optimization(
+        bootstrap_model(config), max_initial_age=300, config=config
+    )
+    model = add_replant_actions(
+        model,
+        target_species=(
+            SpeciesClass.SPRUCE,
+            SpeciesClass.LODGEPOLE_PINE,
+            SpeciesClass.DOUGLAS_FIR,
+            SpeciesClass.OTHER,
+        ),
+    )
+    model = add_salvage_action(model, max_age=300)
+    scenario = _scenario(annual_burn_rate=0.01)
+    model = apply_salvage_operability(model, scenario=scenario, zone_by_au=ZONE_BY_AU)
+    cfg = FireLpConfig(
+        zone_by_au=ZONE_BY_AU,
+        action_codes=("null", "harvest", "salvage") + four_actions,
+    )
+    problem = add_fire_problem(
+        model,
+        cfg,
+        scenario=scenario,
+        surface=interior_surface(),
+        species_by_dtk=SPECIES_MAP,
+        policy=policy,
+    )
+    solve_fire_lp(
+        model,
+        problem,
+        scenario=scenario,
+        config=cfg,
+        replant_action_codes=four_actions,
+    )
+    assert problem.status() == "optimal"
+    mix = _replanted_mix_by_species(model, problem)
+    total_area = sum(mix.values())
+    assert total_area > 0
+    sx_share = mix.get(SpeciesClass.SPRUCE, 0.0) / total_area
+    assert 0.2 <= sx_share <= 0.6, f"spruce share {sx_share:.3f} outside [0.2, 0.6]"
+
+
 def test_three_phase_free_periods_unconstrained(tmp_path):
     """Free periods produce an unconstrained LP (same as no composition)."""
     config = _context(tmp_path)

@@ -2,6 +2,28 @@
 
 Append-only project narrative, reverse-chronological.
 
+## Unreleased — P6.9 acceptance (species-switching-replant)
+
+- **ws3 "action-dropping" limitation retired.** Re-verified on ws3 1.0.5
+  (PyPI) and 1.1.0a5 (editable): 7 action codes (4 replant species) at
+  horizon 10 keep live paths for every action (279 each on the synthetic
+  instance) and solve optimal. Root cause was ours, not ws3: before the
+  DTK pre-creation fix (P6.2, `a39a2fb`), replant transitions pointed at
+  non-existent DTKs so the tree builder never branched on those actions.
+  Regression guards: `test_replant_lp.py` (4-species, all actions
+  survive + solve) and `test_replant_composition.py` (4-species
+  composition solve). No upstream ws3 issue needed.
+- **Backward compatibility vs v0.1.0a2 verified.** Real-instance
+  `baseline-run` (h=30) reproduces the recorded anchor exactly (mean
+  annual harvest 35,451 m3/yr; managed land base 35,083.0 ha); the
+  branch's `git diff main..HEAD src/` touches only replant-feature
+  surfaces (economy/ untouched); default-policy tests pass unchanged.
+- Design doc `design/species-switching-replant.md` → **Implemented**;
+  Known Limitations and Open Questions reconciled (yield source resolved
+  via the BTC store; 4 species supported; replant cost defaults flagged;
+  5 themes confirmed; real-instance timing recorded).
+- `RELEASE_NOTES.md`: 0.2.0a1 (unreleased, PR pending) entry.
+
 ## Unreleased — P6.8 CLI + example configs (species-switching-replant)
 
 - `outer/grid.py`: `PolicyGrid.replant_actions` — propagated to every

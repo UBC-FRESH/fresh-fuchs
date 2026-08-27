@@ -348,6 +348,54 @@ class TestReplantLpSolve:
         assert results["harvest_area_ha"].sum() > 0
         assert results["harvest_volume_m3"].sum() > 0
 
+    def test_four_species_all_actions_survive_and_solve(self, synthetic_bundle) -> None:
+        """All four replant species (7 action codes) keep live paths and solve.
+
+        Regression guard for the recorded "ws3 drops actions at 7+ action
+        counts" limitation (design doc, Known Limitation 1): the root cause
+        was the missing replant-DTK pre-creation (fixed in P6.2), not ws3 —
+        verified on ws3 1.0.5 and 1.1.0a5 (P6.9).
+        """
+        config, yields, areas = synthetic_bundle
+        write_woodstock_files(areas=areas, yields=yields, config=config)
+
+        all_species = (
+            SpeciesClass.SPRUCE,
+            SpeciesClass.LODGEPOLE_PINE,
+            SpeciesClass.DOUGLAS_FIR,
+            SpeciesClass.OTHER,
+        )
+        model = _fresh_model(config)
+        model = add_replant_actions(model, target_species=all_species)
+        model = add_salvage_action(model, max_age=300)
+
+        scenario = _scenario(annual_burn_rate=0.05)
+        model = apply_salvage_operability(model, scenario=scenario, zone_by_au=ZONE_BY_AU)
+
+        action_codes = ("null", "harvest", "salvage") + tuple(
+            f"harvest_{sp.value}" for sp in all_species
+        )
+        cfg = _fire_lp_config(action_codes=action_codes)
+        problem = add_fire_problem(
+            model,
+            cfg,
+            scenario=scenario,
+            surface=interior_surface(),
+            species_by_dtk=_species_map(),
+        )
+        used = {a: 0 for a in action_codes}
+        for _key, tree in (problem.trees or {}).items():
+            for path in tree.paths():
+                for node in path:
+                    acode = node.data("acode")
+                    if acode in used:
+                        used[acode] += 1
+        assert all(used[a] > 0 for a in action_codes if a != "null"), used
+
+        problem.solve(verbose=False)
+        assert problem.status() == "optimal"
+        assert float(problem.z()) > 0
+
     def test_backward_compatible_without_replant(self, synthetic_bundle) -> None:
         config, yields, areas = synthetic_bundle
         write_woodstock_files(areas=areas, yields=yields, config=config)
