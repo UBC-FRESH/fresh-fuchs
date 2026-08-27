@@ -2,6 +2,28 @@
 
 Append-only project narrative, reverse-chronological.
 
+## Unreleased — P6.6 TIPSY (BTC) replant curves generated (species-switching-replant)
+
+Real plantation yield curves for the species-switching replant options
+now exist (issue #48; artifacts live in the femic-tsa29mini-instance
+dataset repo, branch `feature/replant-tipsy-curves`, commit `42bc969` —
+not vendored here).
+
+- 63 pure-plantation BTC curves: all 21 source AUs × PL / SW (SX) / FD;
+  SI flat-transferred from the parent tsa29 managed-AU rows; TSR-informed
+  density/GW/delay; species mixes deferred (maintainer decision).
+- Self-contained Linux+Wine lane reconstructed on this host (scratch
+  wine prefix + wine-mono 9.0.0, userspace string-patched Xvfb, direct
+  `TIPSYbtc.exe /TSR`); runbook in the instance repo
+  (`runbooks/tipsy-replant-btc-linux.md`).
+- Validation: exit 0, zero error rows, 63×36 ages; SW replant curves
+  bit-identical to the parent native SW curves (SBPS_SX L/M/H); PL/FD
+  SI ordering L≤M≤H everywhere; SW M>H inversions inherit parent
+  behaviour verbatim.
+- `design/species-switching-replant.md`: Known Limitation 2 updated —
+  replant curves generated; bundle species-proportion integration and
+  real-curve wiring remain with P6.7 (#49).
+
 ## Unreleased — P6.5 salvage replant integration (species-switching-replant)
 
 Salvage actions can replant with a different species (issue #47).

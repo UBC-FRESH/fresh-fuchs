@@ -679,18 +679,20 @@ produce a parameterized Quarto report for result visualization.
    this. When the ws3 fix lands, the tests should be expanded to all 4
    species.
 
-2. **Bundle lacks species-proportion curves**: the femic tsa29mini
-   bundle is available locally
-   (`femic/external/femic-tsa29mini-instance`, submodule @ `28262a9`)
-   but ships only treated/untreated aggregate curves (108 curves) — no
-   species-proportion curves, and no curves for replanting a site with
-   a different species or species mix than its source stratum. All
-   fresh-fuchs tests therefore use synthetic yield curves. Real curves
-   for the new species/species-mix plantation options will be generated
-   by running TIPSY (BatchTIPSY/BTC) under Wine + Xvfb (lane verified
-   on this host, davis p112 evidence 2026-08-09) — see child issues
-   P6.6 (#48, curve generation) and P6.7 (#49, bundle integration +
-   real-data validation).
+2. **Bundle lacks species-proportion curves; replant curves now
+   generated (P6.6 ✅)**: the femic tsa29mini bundle is available
+   locally (`femic/external/femic-tsa29mini-instance`) but ships only
+   treated/untreated aggregate curves (108 curves) — no
+   species-proportion curves. For the replant feature, real
+   pure-plantation TIPSY (BTC) curves for every source AU × PL/SW/FD
+   (63 curves) were generated on this host under a self-contained
+   Linux+Wine lane and committed to the instance dataset repo (branch
+   `feature/replant-tipsy-curves`, `42bc969`; run manifest
+   `data/tipsy_replant_run_manifest.json`). Remaining: wiring those
+   curves into `build_multi_species_yields()` and the end-to-end
+   real-instance run — P6.7 (#49). Species mixes were descoped from
+   P6.6 (pure options only; mix ratio decision deferred). All
+   fresh-fuchs tests still use synthetic fixtures.
 
 ## Key Files Reference
 
