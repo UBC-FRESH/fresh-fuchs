@@ -2,6 +2,29 @@
 
 Append-only project narrative, reverse-chronological.
 
+## Unreleased — P6.8 CLI + example configs (species-switching-replant)
+
+- `outer/grid.py`: `PolicyGrid.replant_actions` — propagated to every
+  expanded policy, including the `include_unconstrained` baseline (the
+  baseline then isolates the composition constraint's effect).
+- `cli.py`: `build-model --replant-species PL/SX/FD/OT` (repeatable)
+  writes replant AUs + target-species curves into the Woodstock sections
+  (`--replant-curves-csv`/`--replant-manifest-csv` load the P6.6 BTC
+  store; synthetic Chapman–Richards with a warning otherwise);
+  `policy-grid --replant-species` overrides the grid JSON
+  `replant_actions` and echoes the model-pairing requirement.
+- `examples/`: `policy-grid.replant-default.json` (no species switch),
+  `policy-grid.replant-unconstrained.json` (pure economic switching),
+  `policy-grid.replant.json` (SX 0.40/0.60 replant targets, ±0.10, 3
+  free + 5 ramp periods). `docs/cli.rst` and `examples/README.md`
+  updated. (The design doc's `scripts/run_policy_grid.py` update is
+  superseded: the `policy-grid` CLI is the runner.)
+- `tests/test_grid.py`: +4 tests (replant_actions propagation,
+  backward-compatible default, example JSON validate/expand, synthetic
+  `run_grid` with replant policy reporting per-species replant area).
+- Gate: 242 passed, 2 skipped (freshforge env); ruff and sphinx `-W`
+  clean.
+
 ## Unreleased — P6.7 real-curve integration + real-instance validation (species-switching-replant)
 
 - `instance/yields_multi.py`: `load_replant_curves_from_btc()` loads the
