@@ -707,6 +707,39 @@ produce a parameterized Quarto report for result visualization.
 | `outer/grid.py` | PolicyGrid expansion, `CompositionGridAxis` | ✅ Phase 4 complete |
 | `reports/replant_summary.qmd` | Quarto report (11 chunks: tables, charts, BC distance) | ✅ Phase 4b complete |
 | `scripts/render_report.py` | CLI wrapper: LP pipeline + quarto render | ✅ Phase 4b complete |
-| `economy/cashflow.py` | Harvest cash flow, replant cost | Deferred to Phase 5 |
-| `economy/npv.py` | NPV objective wiring | Deferred to Phase 5 |
-| `cli.py` | CLI commands | Deferred to Phase 6 |
+| `economy/cashflow.py` | Harvest cash flow, replant cost | ✅ Unmodified by design — replant cost handled in `_compile_path_z` via `surface.replant_cost_per_ha` |
+| `economy/npv.py` | NPV objective wiring | ✅ Unmodified by design — fire LP owns the objective |
+| `cli.py` | CLI commands | ✅ P6.8 complete (`--replant-species` on `build-model`/`policy-grid`) |
+
+## Follow-ups (post-P6, recorded non-blocking)
+
+Tracked here as the durable surface; also recorded in PR #52 and the
+issue closeouts. None block v0.2.0a1.
+
+1. **Species-mix plantation options** — P6.6 shipped pure PL/SW/FD curves
+   only (maintainer decision 2026-08-27). The BTC lane
+   (`runbooks/tipsy-replant-btc-linux.md` in the instance repo) and the
+   input generator (`build_replant_tipsy_input.py`) extend directly to
+   mixed rows (multi-species `planted_species*`/`planted_density*` +
+   `planted_percent < 100` natural-ingress payload per the Stage 01a
+   contract). Open modelling choice: mix ratio (50/50 vs 70/30 vs
+   TSR-informed shares).
+2. **Report vs constraint consistency for `replant_area_by_species`** —
+   the scenario report metric counts only species-*switching* actions
+   (`harvest_*`/`salvage_*`), while the composition *constraint* also
+   counts base `harvest` as same-species replant
+   (`outer/policy.py::_resolve_species` fallback). A period with only
+   same-species harvest shows `replant_area_by_species` empty. Recorded
+   in `planning/replant-real-curve-validation.md`. Candidate fix: fold
+   base-harvest area into the report metric under the source species
+   (report-only change; constraint semantics already correct).
+3. **OT replant has no TIPSY representation** — OT replant AUs use the
+   synthetic Chapman–Richards fallback (diagnostic emitted). If OT
+   policies matter, add a defensible OT curve source (e.g. TIPSY AT/BL
+   proxies or TSR multi-species rules).
+4. **h=30 MC catalogue sizing with replant actions** — real-instance LP
+   with 5 action codes: h=10 ≈ 35 s build+solve per scenario (P6.7);
+   h=30 exceeds an hour per scenario (consistent with the P3.4 scaling
+   bounds). Full-MC catalogue size at h=30 with replant actions needs a
+   study-design decision (scenario budget, worker pool, or reduced
+   horizon for policy screening).
