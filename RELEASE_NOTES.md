@@ -1,6 +1,6 @@
 # fresh-fuchs Release Notes
 
-## 0.2.0a1 — unreleased (PR pending)
+## 0.2.0a1 — 2026-08-28
 
 Species-switching replant (Phase 6, issue
 [#42](https://github.com/UBC-FRESH/fresh-fuchs/issues/42)): the inner LP

@@ -2,6 +2,12 @@
 
 Append-only project narrative, reverse-chronological.
 
+## 0.2.0a1 — 2026-08-28
+
+Species-switching replant release (phase P6, parent issue #42; PR #52).
+Summary in `RELEASE_NOTES.md`; full narrative in the "Unreleased — P6.*"
+entries below.
+
 ## Unreleased — P6.9 acceptance (species-switching-replant)
 
 - **ws3 "action-dropping" limitation retired.** Re-verified on ws3 1.0.5
