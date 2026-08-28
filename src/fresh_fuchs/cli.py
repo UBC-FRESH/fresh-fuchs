@@ -23,6 +23,7 @@ from fresh_fuchs.economy import (
 from fresh_fuchs.instance import (
     BaselineConfig,
     InstanceConfig,
+    SpeciesClass,
     add_even_flow_problem,
     apply_retention_split,
     bootstrap_model,
@@ -51,6 +52,20 @@ def version() -> None:
     typer.echo(__version__)
 
 
+def _parse_species_codes(codes: list[str]) -> tuple[SpeciesClass, ...]:
+    """Parse CLI species codes (PL/SX/FD/OT, case-insensitive)."""
+    parsed: list[SpeciesClass] = []
+    for code in codes:
+        try:
+            parsed.append(SpeciesClass(code.strip().upper()))
+        except ValueError:
+            valid = ", ".join(sp.value for sp in SpeciesClass)
+            raise typer.BadParameter(
+                f"unknown species code {code!r}; valid: {valid}"
+            ) from None
+    return tuple(dict.fromkeys(parsed))
+
+
 @app.command("build-model")
 def build_model_cmd(
     bundle_dir: Path = typer.Option(..., "--bundle-dir", help="Bundle directory (bundle tables)."),
@@ -61,15 +76,74 @@ def build_model_cmd(
         help="Directory for the Woodstock-format sections.",
     ),
     horizon: int = typer.Option(30, "--horizon", min=1),
+    replant_species: list[str] = typer.Option(
+        None,
+        "--replant-species",
+        help="Species codes (PL/SX/FD/OT) to register replant AUs for; repeatable. "
+        "Pair any policy-grid replant actions with a model built this way.",
+    ),
+    replant_curves_csv: Path | None = typer.Option(
+        None,
+        "--replant-curves-csv",
+        help="BTC replant curves (long format AU/Age/Yield), e.g. "
+        "data/tipsy_curves_tsa29mini_replant.csv. Requires --replant-manifest-csv.",
+    ),
+    replant_manifest_csv: Path | None = typer.Option(
+        None,
+        "--replant-manifest-csv",
+        help="Replant option manifest (feature_id -> au_id/target_species).",
+    ),
 ) -> None:
-    """Build the ws3 model from the tsa29mini bundle (Phase 1)."""
+    """Build the ws3 model from the tsa29mini bundle (Phase 1).
+
+    With ``--replant-species``, replant AUs and their target-species yield
+    curves are written into the Woodstock sections: real TIPSY (BTC) curves
+    when ``--replant-curves-csv`` + ``--replant-manifest-csv`` are given
+    (P6.6 artifacts), otherwise synthetic Chapman–Richards curves.
+    """
     config = InstanceConfig(
         bundle_dir=bundle_dir,
         fragments_path=fragments_path,
         model_path=model_path,
         horizon=horizon,
     )
-    model, summary = build_model(config)
+    species = _parse_species_codes(replant_species or [])
+    replant_yields = None
+    if species:
+        import warnings
+
+        from fresh_fuchs.instance.yields_multi import (
+            build_multi_species_yields,
+            load_replant_curves_from_btc,
+        )
+
+        if (replant_curves_csv is None) != (replant_manifest_csv is None):
+            raise typer.BadParameter(
+                "--replant-curves-csv and --replant-manifest-csv must be given together"
+            )
+        au_table = pd.read_csv(bundle_dir / "au_table.csv")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            if replant_curves_csv is not None:
+                store = load_replant_curves_from_btc(replant_curves_csv, replant_manifest_csv)
+                replant_yields = build_multi_species_yields(
+                    au_table=au_table, replant_curves=store, target_species=list(species)
+                )
+            else:
+                replant_yields = build_multi_species_yields(
+                    au_table=au_table, target_species=list(species)
+                )
+        for w in caught:
+            typer.echo(f"  warning: {w.message}")
+        if replant_curves_csv is None:
+            typer.echo(
+                "  note: no BTC replant curves given; replant AUs use synthetic "
+                "Chapman-Richards curves (pass --replant-curves-csv/--replant-manifest-csv "
+                "for real TIPSY curves)."
+            )
+    model, summary = build_model(
+        config, replant_species=species or None, replant_yields=replant_yields
+    )
     typer.echo(f"Built model {config.model_name}: {len(model.dtypes):,} development types")
     typer.echo(
         f"Total area: {summary['total_area_ha']:.1f} ha | "
@@ -334,6 +408,13 @@ def policy_grid_cmd(
     master_seed: int = typer.Option(42, "--master-seed"),
     scenario_workers: int = typer.Option(1, "--scenario-workers", min=1),
     policy_workers: int = typer.Option(1, "--policy-workers", min=1),
+    replant_species: list[str] = typer.Option(
+        None,
+        "--replant-species",
+        help="Species codes (PL/SX/FD/OT) enabling species-switching replant "
+        "actions (harvest_PL/...); repeatable. Overrides the grid JSON "
+        "'replant_actions' when given.",
+    ),
     out_dir: Path = typer.Option(
         Path("outputs") / "tsa29mini" / "policy_grid",
         "--out-dir",
@@ -346,6 +427,13 @@ def policy_grid_cmd(
     evaluates every policy over the seed-fixed MC scenario catalogue
     (scenario -> inner-LP pipeline with the policy rows), and writes
     per-policy run records plus grid summaries.
+
+    Species-switching replant: set ``replant_actions`` in the grid JSON (or
+    override with ``--replant-species``) to give the inner LP per-species
+    replant decision variables; composition targets then bind on replant
+    area. Build the model with matching ``build-model --replant-species``
+    (ideally with the BTC replant curves) first — otherwise replant DTKs
+    fall back to source-AU curve placeholders.
     """
     import json
 
@@ -362,6 +450,18 @@ def policy_grid_cmd(
 
     config = InstanceConfig(model_name=model_name, model_path=model_path, horizon=horizon)
     grid = PolicyGrid.model_validate(json.loads(grid_json.read_text()))
+    if replant_species:
+        species = _parse_species_codes(replant_species)
+        grid = grid.model_copy(
+            update={"replant_actions": tuple(f"harvest_{sp.value}" for sp in species)}
+        )
+    if grid.replant_actions:
+        typer.echo(f"  replant actions active: {', '.join(grid.replant_actions)}")
+        typer.echo(
+            "  note: pair with build-model --replant-species (same species, ideally "
+            "with --replant-curves-csv/--replant-manifest-csv) so replant DTKs carry "
+            "real target-species curves."
+        )
 
     au_table = pd.read_csv(bundle_dir / "au_table.csv")
     au_table["zone"] = au_table["stratum_code"].str.split("_").str[0].str.upper()

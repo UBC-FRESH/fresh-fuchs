@@ -1,0 +1,12 @@
+{
+  "name": "replant_unconstrained",
+  "include_unconstrained": false,
+  "replant_actions": ["harvest_SX", "harvest_FD"],
+  "comment": "Species-switching replant available (spruce + Douglas-fir replant actions) with NO composition targets: the inner LP chooses replant species purely on economics. Useful as the reference point for measuring the effect of composition constraints. (include_unconstrained is false: with no composition axes/points and no harvest axis, expand() already yields exactly one unconstrained point.)",
+  "provenance": {
+    "source": "example grid",
+    "as_of": "2026-08-27",
+    "units": "policy spec",
+    "basis": "public-safe example: two-species replant, unconstrained"
+  }
+}

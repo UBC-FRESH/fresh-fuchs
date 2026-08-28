@@ -2,6 +2,293 @@
 
 Append-only project narrative, reverse-chronological.
 
+## Unreleased — P6.9 acceptance (species-switching-replant)
+
+- **ws3 "action-dropping" limitation retired.** Re-verified on ws3 1.0.5
+  (PyPI) and 1.1.0a5 (editable): 7 action codes (4 replant species) at
+  horizon 10 keep live paths for every action (279 each on the synthetic
+  instance) and solve optimal. Root cause was ours, not ws3: before the
+  DTK pre-creation fix (P6.2, `a39a2fb`), replant transitions pointed at
+  non-existent DTKs so the tree builder never branched on those actions.
+  Regression guards: `test_replant_lp.py` (4-species, all actions
+  survive + solve) and `test_replant_composition.py` (4-species
+  composition solve). No upstream ws3 issue needed.
+- **Backward compatibility vs v0.1.0a2 verified.** Real-instance
+  `baseline-run` (h=30) reproduces the recorded anchor exactly (mean
+  annual harvest 35,451 m3/yr; managed land base 35,083.0 ha); the
+  branch's `git diff main..HEAD src/` touches only replant-feature
+  surfaces (economy/ untouched); default-policy tests pass unchanged.
+- Design doc `design/species-switching-replant.md` → **Implemented**;
+  Known Limitations and Open Questions reconciled (yield source resolved
+  via the BTC store; 4 species supported; replant cost defaults flagged;
+  5 themes confirmed; real-instance timing recorded).
+- `RELEASE_NOTES.md`: 0.2.0a1 (unreleased, PR pending) entry.
+
+## Unreleased — P6.8 CLI + example configs (species-switching-replant)
+
+- `outer/grid.py`: `PolicyGrid.replant_actions` — propagated to every
+  expanded policy, including the `include_unconstrained` baseline (the
+  baseline then isolates the composition constraint's effect).
+- `cli.py`: `build-model --replant-species PL/SX/FD/OT` (repeatable)
+  writes replant AUs + target-species curves into the Woodstock sections
+  (`--replant-curves-csv`/`--replant-manifest-csv` load the P6.6 BTC
+  store; synthetic Chapman–Richards with a warning otherwise);
+  `policy-grid --replant-species` overrides the grid JSON
+  `replant_actions` and echoes the model-pairing requirement.
+- `examples/`: `policy-grid.replant-default.json` (no species switch),
+  `policy-grid.replant-unconstrained.json` (pure economic switching),
+  `policy-grid.replant.json` (SX 0.40/0.60 replant targets, ±0.10, 3
+  free + 5 ramp periods). `docs/cli.rst` and `examples/README.md`
+  updated. (The design doc's `scripts/run_policy_grid.py` update is
+  superseded: the `policy-grid` CLI is the runner.)
+- `tests/test_grid.py`: +4 tests (replant_actions propagation,
+  backward-compatible default, example JSON validate/expand, synthetic
+  `run_grid` with replant policy reporting per-species replant area).
+- Gate: 242 passed, 2 skipped (freshforge env); ruff and sphinx `-W`
+  clean.
+
+## Unreleased — P6.7 real-curve integration + real-instance validation (species-switching-replant)
+
+- `instance/yields_multi.py`: `load_replant_curves_from_btc()` loads the
+  P6.6 BTC replant curve store (curves + manifest →
+  `MultiSpeciesYieldTable` keyed by `(au_id, SpeciesClass)`; SW maps to
+  SPRUCE); `build_multi_species_yields()` gains a `replant_curves`
+  overlay — real TIPSY curves win, synthetic fills the rest with a
+  `UserWarning` diagnostic naming uncovered combinations.
+- `instance/replant.py`: `_precreate_replant_dtypes` prefers the ws3
+  `model.yields` stash (curves written into the Woodstock `.yld` for the
+  replant AU) over the source-DTK placeholder copy; mask matching is
+  case-insensitive (ws3 lowercases mask entries on import).
+- `instance/__init__.py`: `build_model()` accepts `replant_species` +
+  `replant_yields`, writing replant-AU curves into the Woodstock
+  sections.
+- `tests/test_replant_curves_btc.py` (9 tests): loader (keys, clipping,
+  error paths), resolution order (real wins, synthetic warns, target
+  filter), DTK wiring (real curve from stash; fallback copy without
+  stash).
+- End-to-end real-instance validation (tsa29mini bundle, h=10, 2
+  fixed-seed fire scenarios, composition policy 40% SX ± 0.10 with
+  3 free + 5 ramp periods): both scenarios optimal; replant DTKs carry
+  the real BTC curves (within ws3 curve-simplification tolerance); SX
+  replant share respects the band in binding periods.
+  Evidence: `planning/replant-real-curve-validation.md`.
+- Gate: 238 passed, 2 skipped (freshforge env); ruff clean.
+
+## Unreleased — P6.6 TIPSY (BTC) replant curves generated (species-switching-replant)
+
+Real plantation yield curves for the species-switching replant options
+now exist (issue #48; artifacts live in the femic-tsa29mini-instance
+dataset repo, branch `feature/replant-tipsy-curves`, commit `42bc969` —
+not vendored here).
+
+- 63 pure-plantation BTC curves: all 21 source AUs × PL / SW (SX) / FD;
+  SI flat-transferred from the parent tsa29 managed-AU rows; TSR-informed
+  density/GW/delay; species mixes deferred (maintainer decision).
+- Self-contained Linux+Wine lane reconstructed on this host (scratch
+  wine prefix + wine-mono 9.0.0, userspace string-patched Xvfb, direct
+  `TIPSYbtc.exe /TSR`); runbook in the instance repo
+  (`runbooks/tipsy-replant-btc-linux.md`).
+- Validation: exit 0, zero error rows, 63×36 ages; SW replant curves
+  bit-identical to the parent native SW curves (SBPS_SX L/M/H); PL/FD
+  SI ordering L≤M≤H everywhere; SW M>H inversions inherit parent
+  behaviour verbatim.
+- `design/species-switching-replant.md`: Known Limitation 2 updated —
+  replant curves generated; bundle species-proportion integration and
+  real-curve wiring remain with P6.7 (#49).
+
+## Unreleased — P6.5 salvage replant integration (species-switching-replant)
+
+Salvage actions can replant with a different species (issue #47).
+
+- `scenario/fire_lp.py`: salvage replant actions (`salvage_SX`, …) carry
+  the P2.4 burned-price margin on the salvaged pool (already, via the
+  `salvage*` prefix) plus, new, the target-species replant cost in
+  `_compile_path_z` when `charge_replant_in_npv` is set (base `salvage`
+  unchanged); `apply_salvage_operability` prunes all registered
+  `salvage*` actions in fire-free periods (autodetected from
+  `model.actions`); `add_fire_problem` adds the `salvage_feas` row when
+  any `salvage*` code is in `action_codes`; `solve_fire_lp` attributes
+  `salvage_*` schedule area to `replant_area_by_species` under the
+  target species.
+- `instance/replant.py`: `add_replant_salvage_actions` now pre-creates
+  replant DTKs (standalone salvage replant no longer crashes the ws3
+  tree builder); `_precreate_replant_dtypes` resolves replant target
+  species via `target_species_from_acode` instead of positional
+  parallel-array indexing.
+- `tests/test_replant_salvage.py` (13 tests): registration, transition
+  targets, path fire dynamics, path-level economics, operability
+  pruning, subsidised LP solves, replant-cost objective delta, backward
+  compatibility.
+- Recorded semantics: outer composition rows bind on `harvest*` steps
+  only; salvage replant area is reported but does not count toward
+  composition targets (see design doc Phase 5).
+- Gate: 229 passed, 2 skipped (freshforge env); ruff clean.
+
+## Unreleased — P6 issue tracking + TIPSY curve plan (species-switching-replant)
+
+- Issue tracker wired up for the species-switching replant phase:
+  parent issue #42 (Phase 6, branch `feature/species-switching-replant`)
+  with children #43–#51 (P6.1–P6.9). Design phases 1–4b were already
+  complete on the branch, so P6.1–P6.4 (#43–#46) were created and closed
+  retroactively with closeout comments referencing the implementing
+  commits. Open: P6.5 #47 (salvage replant integration), P6.6 #48
+  (TIPSY/BTC species-mix plantation yield curves for tsa29mini),
+  P6.7 #49 (bundle species-curve integration + real-data validation),
+  P6.8 #50 (CLI + example configs), P6.9 #51 (acceptance).
+- `ROADMAP.md`: P6 row added to the issue tracker map.
+- `design/species-switching-replant.md`: status moved to In Progress
+  with issue cross-references; stale "bundle data not locally
+  available" limitation corrected — the tsa29mini bundle is present at
+  `femic/external/femic-tsa29mini-instance` (submodule @ `28262a9`) but
+  ships no species-proportion curves (108 treated/untreated curves
+  only); real curves for the new species/species-mix plantation options
+  will come from TIPSY (BTC) runs under Wine + Xvfb (lane verified on
+  this host, davis p112 evidence 2026-08-09) via P6.6/P6.7.
+- `design/README.md`: species-switching-replant status updated.
+
+## Unreleased — fire regime design note (documentation)
+
+- `design/fire-regime.md`: design note on the wildfire regime — real-world
+  semantics (zone MFRI ladder, severity ladder, burned-wood decay,
+  harvest→fire→salvage→decay ordering, full-foresight MC treatment),
+  LP encoding via path-dependent survival coefficients and the salvage
+  action, validation summary (fresh-salvage parity, fire-free anchor
+  reproduction, burn-multiplier monotonicity table, MC convergence
+  guidance n≈40, LP-size bounds), recorded limitations (no spatial
+  spread, age-independent hazard, expected-value within-scenario burns,
+  uniform severity tier, untracked burned carryover), and a
+  species-specific parameterization roadmap (hazard by fuel type,
+  mortality by species×age, salvageability by species, per-fuel-type
+  severity; stratum codes already carry the leading species).
+- `design/README.md`: index the new document.
+- `design/parameters.md`: cross-link §5 Fire dynamics to the new note.
+
+## Unreleased — parameter reference (documentation)
+
+- `design/parameters.md`: consolidated parameter reference across all
+  layers — instance/horizon, yields & species, economic surface, fhops
+  costing, fire dynamics, MC scenario generation, inner LP, outer policy,
+  risk/ranking, orchestration, reporting. Each entry records application
+  site, default, unit, description, and implementation status
+  (implemented / off by default / prepared for future / internal).
+  Flags call-site inconsistencies (burn-multiplier std, `max_initial_age`)
+  and v0.1.0a1 scope exclusions.
+- `design/README.md`: index the new reference document.
+
+## Unreleased — species-switching replant (feature/species-switching-replant)
+
+Species-switching replant transitions: harvest any species and replant
+with a different species, driven by policy-level composition targets.
+
+Phase 1 — Multi-species yield curve framework:
+- `instance/yields_multi.py`: `YieldCurve` dataclass, `MultiSpeciesYieldTable`,
+  `generate_synthetic_curve()` (Chapman-Richards with species-specific params
+  and SI-level scaling), `build_multi_species_yields()` (tries bundle
+  species-proportion curves first, falls back to synthetic).
+- `tests/test_yields_multi.py`: 21 tests.
+
+Phase 2 — Replant action registration:
+- `instance/replant.py`: `add_replant_actions()` registers per-species
+  harvest actions (`harvest_SX`, `harvest_PL`, `harvest_FD`) with per-AU
+  target masks; `add_replant_salvage_actions()` for salvage → replant;
+  `replant_au_id()` computes replant AU codes (e.g. `1001` → `1001-SX`).
+- `instance/woodstock.py`: `_landscape_section()` and `write_woodstock_files()`
+  extended to add replant AU codes and yield curves; `prepare_optimization()`
+  accepts `replant_species` parameter.
+- `tests/test_replant_actions.py`: 23 tests (action registration, operability,
+  transitions, apply, salvage, backward compatibility).
+- `design/species-switching-replant.md`: Phase 1 and 2 marked complete;
+  `_REPLACE` limitation documented (ws3 hack doesn't support string
+  concatenation), per-AU mask approach adopted.
+- `design/yield-curve-framework.md`: data dependency flag, grouping
+  variables, strategy, upgrade path.
+
+Phase 3 — LP wiring (objective + even-flow):
+- `instance/replant.py`: added `target_species_from_acode()` helper to
+  extract target species from replant action codes (e.g. `"harvest_SX"`
+  → `SpeciesClass.SPRUCE`).
+- `scenario/fire_lp.py`: `path_fire_steps` recognizes `harvest_*` and
+  `salvage_*` as harvest/salvage actions; `_burn_prob_for_dtk` strips
+  replant AU suffixes for zone lookup; `path_fire_steps` handles missing
+  yield curves on replant AUs (treats as zero volume); `_compile_path_z`
+  charges source-species timber revenue plus target-species replant cost;
+  `_compile_path_caa` aggregates volume across all harvest actions;
+  `solve_fire_lp` accepts `replant_action_codes` to sum replant volumes
+  into the harvest totals.
+- `tests/test_replant_lp.py`: 15 tests (acode parsing, survival reset,
+  LP solve, replant cost impact, even-flow aggregation, backward compat).
+- `examples/replant_lp_example.py`: end-to-end demo with synthetic data.
+
+Phase 4 — Replant composition constraints:
+- `outer/records.py`: `CompositionTarget` gains `n_free_periods` and
+  `n_ramp_periods` (three-phase transition: free → ramp → binding);
+  `PolicyRecord` gains `replant_actions: tuple[str, ...] | None` to
+  control whether composition binds on target species (replant area) or
+  source species (existing behavior).
+- `outer/policy.py`: `_harvest_steps` yields acode and accepts
+  `replant_actions` filter; `_resolve_species` determines species from
+  action code or DTK; `_share_by_period` computes per-period effective
+  tolerance from the three-phase schedule; `_composition_coeff` is
+  period-aware with variable share; `policy_coeff_funcs` accepts
+  `periods` and passes `replant_actions` through.
+- `outer/grid.py`: `CompositionGridAxis` gains `n_free_periods` and
+  `n_ramp_periods`, passed through to `CompositionTarget` in axis and
+  points modes.
+- `instance/baseline.py`, `scenario/fire_lp.py`: callers of
+  `policy_coeff_funcs` pass `periods=model.periods`.
+- `tests/test_replant_composition.py`: 16 tests (share_by_period,
+  resolve_species, composition binding, three-phase transition,
+  backward compat, grid expansion).
+
+Phase 4b — Species-specific LP outputs + Quarto report:
+- `scenario/pipeline.py`: `ScenarioRunPeriod` gains
+  `harvest_area_by_species`, `harvest_volume_by_species`,
+  `replant_area_by_species` (all `dict[str, float]`); `run_scenario_lp`
+  adds replant actions to the model when `policy.replant_actions` is
+  set, passes replant action codes to `FireLpConfig.action_codes` and
+  to `solve_fire_lp`.
+- `scenario/fire_lp.py`: `solve_fire_lp` accepts `species_by_dtk`
+  parameter; extracts per-species harvest area/volume and replant area
+  from schedule after solve+apply; attributes base `harvest` acode via
+  `species_by_dtk`, replant `harvest_*` via `target_species_from_acode`.
+- `reports/_quarto.yml`: Quarto project config (HTML format, Jupyter
+  engine).
+- `reports/replant_summary.qmd`: parameterized 11-chunk report (period
+  results table + bar chart, replant composition stacked bar, Bray-
+  Curtis dissimilarity, species harvest trajectory, salvage, policy
+  comparison table + NPV bar chart, summary metrics). Reads from env
+  vars `FUCHS_GRID_DIR` and `FUCHS_POLICY`.
+- `scripts/render_report.py`: CLI wrapper (`--rerun`, `--policy`,
+  `--grid-dir`); builds a 4-policy grid (unconstrained + 3 composition
+  targets), writes CSVs, calls `quarto render`.
+- `pyproject.toml`: `reports = ["matplotlib"]` optional dependency.
+
+Known limitation: ws3 `compile_problem` silently drops actions at 7+
+action codes (observed on synthetic 2-AU instance). Replant tests
+use 2 species (SX + FD, 5 actions) to avoid this; 4-species tests
+deferred to ws3 fix. Documented in `design/species-switching-replant.md`.
+
+All 223 tests pass; lint clean.
+
+Replant DTK pre-creation fix:
+- `instance/replant.py`: `add_replant_actions` now pre-creates
+  replant DTKs (e.g. `1-SX`, `2-FD`) in `model.dtypes` before tree
+  building, with yield curves copied from source DTKs, correct
+  per-action operability, and `(acode, -1)` transitions.  This
+  prevents ws3's `_bld_tree_m1` from crashing when stands reach
+  harvest age after replanting (horizon >= 7 periods).
+  `replant_au_id` now strips existing suffixes before appending
+  (prevents double-suffix `1-FD-SX`).
+- `scenario/fire_lp.py`: `apply_salvage_operability` strips replant
+  suffixes before `int()` to avoid `ValueError` on replant DTK keys.
+- `examples/replant_lp_example.py`: rewritten to run N MC fire
+  scenarios with `generate_scenarios` + `ScenarioGenerationParams`;
+  10-scenario × 100-yr demo with two policies.
+- `tests/test_replant_actions.py`: 5 new tests in
+  `TestReplantPrecreatedDtypes` (DTK existence, null operability,
+  yield curves, transitions, horizon-10 tree build + solve).
+  Total: 174 tests pass; lint clean.
+
 ## 0.1.0a1 — 2026-08-14
 
 Phase 5 (orchestration, validation, calibration, release) complete on

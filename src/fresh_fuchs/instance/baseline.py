@@ -75,7 +75,9 @@ def add_even_flow_problem(
 
         if policy.composition_targets and species_by_dtk is None:
             raise ValueError("composition targets require species_by_dtk")
-        coeff_funcs.update(policy_coeff_funcs(policy, species_by_dtk=species_by_dtk or {}))
+        coeff_funcs.update(policy_coeff_funcs(
+            policy, species_by_dtk=species_by_dtk or {}, periods=model.periods,
+        ))
         cgen_data = policy_cgen_data(
             policy, period_length=model.period_length, periods=model.periods
         )

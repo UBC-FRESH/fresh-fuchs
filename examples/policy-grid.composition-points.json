@@ -1,0 +1,28 @@
+{
+  "name": "tsa29mini_composition_points",
+  "composition_points": [
+    {"PL": 0.70, "FD": 0.20},
+    {"PL": 0.60, "FD": 0.30},
+    {"PL": 0.80, "FD": 0.10},
+    {"PL": 0.50, "FD": 0.20, "tolerance": 0.03}
+  ],
+  "composition_tolerance": 0.05,
+  "harvest_axis": {
+    "mode": "aac_proxy",
+    "values": [30000.0, 40000.0],
+    "tolerance": 0.05,
+    "provenance": {
+      "source": "example grid",
+      "as_of": "2026-08-14",
+      "units": "m3/yr",
+      "basis": "candidate AAC levels"
+    }
+  },
+  "include_unconstrained": true,
+  "provenance": {
+    "source": "example grid",
+    "as_of": "2026-08-14",
+    "units": "policy spec",
+    "basis": "explicit species composition points"
+  }
+}

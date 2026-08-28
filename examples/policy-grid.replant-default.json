@@ -1,0 +1,22 @@
+{
+  "name": "replant_default",
+  "include_unconstrained": true,
+  "comment": "Backward-compatible default: no replant_actions, so the inner LP replants the same species (v0.1.0a2 behaviour). One unconstrained baseline plus one AAC-proxy point.",
+  "harvest_axis": {
+    "mode": "aac_proxy",
+    "values": [40000.0],
+    "tolerance": 0.05,
+    "provenance": {
+      "source": "example grid",
+      "as_of": "2026-08-27",
+      "units": "m3/yr",
+      "basis": "public-safe example: single candidate AAC level"
+    }
+  },
+  "provenance": {
+    "source": "example grid",
+    "as_of": "2026-08-27",
+    "units": "policy spec",
+    "basis": "public-safe example: species-switching replant family, default (no switch)"
+  }
+}

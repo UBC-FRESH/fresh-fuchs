@@ -50,6 +50,14 @@ Options:
 - ``--fragments`` — fragments shapefile path (required).
 - ``--model-path`` — output directory for the Woodstock-format sections.
 - ``--horizon`` — number of periods (default 30).
+- ``--replant-species`` — species code (``PL``/``SX``/``FD``/``OT``;
+  repeatable). Registers replant AUs and writes their target-species yield
+  curves into the sections (species-switching replant, Phase 6 / P6).
+- ``--replant-curves-csv`` / ``--replant-manifest-csv`` — the P6.6 BTC
+  replant curve artifacts (e.g. ``data/tipsy_curves_tsa29mini_replant.csv``
+  + ``data/tipsy_replant_manifest-tsa29mini.csv`` in the instance repo);
+  must be given together. Without them, replant AUs get synthetic
+  Chapman–Richards curves.
 
 Exit status is nonzero if ``femic``/``geopandas`` are unavailable or any
 required input is missing.
@@ -196,9 +204,26 @@ Options:
 - ``--grid-json`` — ``PolicyGrid`` definition (JSON; see
   ``examples/policy-grid.tsa29mini.json``) (required).
 - ``--scenario-workers`` / ``--policy-workers`` — nested process pools.
+- ``--replant-species`` — species code (``PL``/``SX``/``FD``/``OT``;
+  repeatable). Overrides the grid JSON ``replant_actions`` with the
+  corresponding ``harvest_<SP>`` action codes.
 - ``--out-dir`` — directory for grid records (``grid_summary.csv`` /
   ``grid_summary.json`` + per-policy runs).
 - The bundle/model/seed options match ``scenario-run``.
+
+Species-switching replant (Phase 6 / P6): the grid JSON accepts a
+top-level ``replant_actions`` list (e.g. ``["harvest_SX", "harvest_FD"]``,
+see ``examples/policy-grid.replant.json``) that is propagated to every
+expanded policy, including the ``include_unconstrained`` baseline. When
+set, composition targets bind on *replant* area by target species (with
+the ``n_free_periods`` / ``n_ramp_periods`` three-phase schedule);
+otherwise they bind on harvested area by source species (v0.1.0a2
+behaviour). Pair with a model built by ``build-model --replant-species``
+(same species; ideally with the BTC replant curves) so replant
+development types carry real target-species yield curves — otherwise the
+replant development types fall back to source-AU curve placeholders.
+Per-scenario schedule CSVs include ``harvest_area_by_species``,
+``harvest_volume_by_species``, and ``replant_area_by_species``.
 
 ``policy-rank``
 ---------------
